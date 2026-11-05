@@ -1,0 +1,3 @@
+# Core dependencies for Griductive Solver
+-r Source/requirements.txt
+
