@@ -83,20 +83,23 @@ class ExplicitList(Region):
     def __post_init__(self) -> None:
         if not self.members:
             raise ValueError("[ExplicitList]: Vùng không được rỗng")
+        if not all(isinstance(c, Cell) for c in self.members):
+            raise ValueError("[ExplicitList]: Các phần tử phải là Cell")
         if len(set(self.members)) != len(self.members):
             raise ValueError("[ExplicitList]: Các ô trong vùng phải phân biệt")
+        object.__setattr__(self, "members", tuple(sorted(self.members)))
 
     def cells(self, board: Board) -> tuple[Cell, ...]:
         for c in self.members:
             if not board.contains(c):
                 raise ValueError(f"[ExplicitList]: Ô {c.label} ngoài board")
-        return tuple(sorted(self.members))
+        return self.members
 
     def to_dict(self) -> dict[str, Any]:
-        return {"type": "CELLS", "cells": [c.label for c in sorted(self.members)]}
+        return {"type": "CELLS", "cells": [c.label for c in self.members]}
 
     def describe(self) -> str:
-        return "cells " + ", ".join(c.label for c in sorted(self.members))
+        return "cells " + ", ".join(c.label for c in self.members)
 
 
 def region_from_dict(data: Mapping[str, Any]) -> Region:

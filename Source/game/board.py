@@ -67,6 +67,8 @@ class Board:
 
     def cell_at(self, index: int) -> Cell:
         """Lấy tọa độ ô theo vị trí đánh số"""
+        if not 1 <= index <= self._size * self._size:
+            raise ValueError(f"[Board]: Chỉ số ô ngoài phạm vi [1, {self._size * self._size}], nhận được {index!r}")
         return self._cells[index - 1]
 
     def cells_by_name(self) -> tuple[Cell, ...]:
