@@ -102,15 +102,29 @@ class ExplicitList(Region):
         return "cells " + ", ".join(c.label for c in self.members)
 
 
+def _require(data: Mapping[str, Any], kind: str, *fields: str) -> None:
+    """Kiểm tra thiếu trường dữ liệu"""
+    for f in fields:
+        if f not in data:
+            raise ValueError(f"[{kind}]: Thiếu trường '{f}'")
+        
+
 def region_from_dict(data: Mapping[str, Any]) -> Region:
     """Tạo Region từ dict cho puzzle_loader"""
+    if "type" not in data:
+        raise ValueError("[Region]: Thiếu trường 'type'")
+    
     kind = data["type"]
     if kind == "ROW":
+        _require(data, kind, "number")
         return Row(int(data["number"]))
     if kind == "COLUMN":
+        _require(data, kind, "letter")
         return Column(str(data["letter"]))
     if kind == "NEIGHBORS":
+        _require(data, kind, "cell")
         return Neighbors(Cell.parse(data["cell"]))
     if kind == "CELLS":
+        _require(data, kind, "cells")
         return ExplicitList(tuple(Cell.parse(s) for s in data["cells"]))
     raise ValueError(f"[Region]: Loại vùng không hợp lệ: {kind!r}")

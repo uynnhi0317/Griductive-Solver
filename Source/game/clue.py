@@ -97,10 +97,16 @@ class FactClue(Clue):
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "FactClue":
+        for field in ("cell", "status"):
+            if field not in data:
+                raise ValueError(f"[FACT]: Thiếu trường '{field}'")
+
+        status_raw = data["status"]
         try:
-            status = Status[data["status"]]
-        except KeyError:
-            raise ValueError(f"[FACT]: Trạng thái không hợp lệ: {data.get('status')!r}") from None
+            status = Status[status_raw]
+        except (KeyError, TypeError):
+            raise ValueError(f"[FACT]: Trạng thái không hợp lệ: {status_raw!r}") from None
+
         return cls(Cell.parse(data["cell"]), status)
 
 
