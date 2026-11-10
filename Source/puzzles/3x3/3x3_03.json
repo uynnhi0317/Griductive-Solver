@@ -1,0 +1,134 @@
+{
+  "id": "3x3_03",
+  "title": "Two Witnesses",
+  "description": "Two face-up cards; the key verdicts need several revealed clues combined.",
+  "size": 3,
+  "characters": {
+    "A1": {
+      "name": "Aria",
+      "profession": "Architect"
+    },
+    "B1": {
+      "name": "Blake",
+      "profession": "Banker"
+    },
+    "C1": {
+      "name": "Cleo",
+      "profession": "Clerk"
+    },
+    "A2": {
+      "name": "Drew",
+      "profession": "Driver"
+    },
+    "B2": {
+      "name": "Elle",
+      "profession": "Electrician"
+    },
+    "C2": {
+      "name": "Ford",
+      "profession": "Fisher"
+    },
+    "A3": {
+      "name": "Gwen",
+      "profession": "Geologist"
+    },
+    "B3": {
+      "name": "Hank",
+      "profession": "Historian"
+    },
+    "C3": {
+      "name": "Iris",
+      "profession": "Illustrator"
+    }
+  },
+  "solution": {
+    "A1": "CRIMINAL",
+    "B1": "INNOCENT",
+    "C1": "CRIMINAL",
+    "A2": "INNOCENT",
+    "B2": "CRIMINAL",
+    "C2": "INNOCENT",
+    "A3": "INNOCENT",
+    "B3": "CRIMINAL",
+    "C3": "INNOCENT"
+  },
+  "clues": {
+    "A1": {
+      "type": "EXACTLY",
+      "k": 3,
+      "region": {
+        "type": "NEIGHBORS",
+        "cell": "B1"
+      }
+    },
+    "B1": {
+      "type": "AT_MOST",
+      "k": 0,
+      "region": {
+        "type": "CELLS",
+        "cells": [
+          "A2",
+          "C2"
+        ]
+      }
+    },
+    "C1": {
+      "type": "EXACTLY",
+      "k": 2,
+      "region": {
+        "type": "COLUMN",
+        "letter": "B"
+      }
+    },
+    "A2": {
+      "type": "EXACTLY",
+      "k": 1,
+      "region": {
+        "type": "COLUMN",
+        "letter": "A"
+      }
+    },
+    "B2": {
+      "type": "AT_MOST",
+      "k": 1,
+      "region": {
+        "type": "COLUMN",
+        "letter": "C"
+      }
+    },
+    "C2": {
+      "type": "SAME",
+      "cells": [
+        "A1",
+        "C1"
+      ]
+    },
+    "A3": {
+      "type": "EXACTLY",
+      "k": 1,
+      "region": {
+        "type": "ROW",
+        "number": 3
+      }
+    },
+    "B3": {
+      "type": "DIFFERENT",
+      "cells": [
+        "A3",
+        "B3"
+      ]
+    },
+    "C3": {
+      "type": "EXACTLY",
+      "k": 2,
+      "region": {
+        "type": "NEIGHBORS",
+        "cell": "C3"
+      }
+    }
+  },
+  "initially_revealed": [
+    "B1",
+    "C3"
+  ]
+}
