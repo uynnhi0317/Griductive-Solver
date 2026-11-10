@@ -36,6 +36,7 @@ class CNF:
 
     + Mệnh đề rỗng được giữ lại: nó có nghĩa là UNSAT
     + Tautology bị bỏ qua và được đếm trong tautologies_skipped
+    + Duplicates bị bỏ qua và được đếm trong duplicates_skipped
     """
 
     def __init__(self, clauses: Iterable[Iterable[Literal]] = ()) -> None:
