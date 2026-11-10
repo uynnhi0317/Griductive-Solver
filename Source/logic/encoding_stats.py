@@ -12,8 +12,8 @@ from .variable_map import VariableMap
 class EncodingStats:
     main_vars: int      # số biến chính đã khai báo (N*N)
     aux_vars: int       # số biến phụ đã cấp
-    clauses: int        # số mệnh đề trong CNF (không tính tautology)
-    unit_clauses: int   # số mệnh đề đơn (verdict đã chứng minh)
+    clauses: int        # số mệnh đề trong CNF (không tính tautology và duplicates)
+    unit_clauses: int   # số mệnh đề đơn (1 literal) trong CNF
     max_clause_len: int # độ dài mệnh đề lớn nhất (0 nếu CNF rỗng)
 
     @property

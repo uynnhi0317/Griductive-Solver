@@ -13,6 +13,8 @@ from game.board import Board
 from game.cell import Cell
 from game.character import Status
 
+def _is_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
 
 class VariableMap:
     def __init__(self, board: Board) -> None:
@@ -78,10 +80,10 @@ class VariableMap:
         return tuple(range(self._num_main + 1, self.max_var + 1))
 
     def is_main(self, var: int) -> bool:
-        return isinstance(var, int) and 1 <= var <= self._num_main
+        return _is_int(var) and 1 <= var <= self._num_main
 
     def is_aux(self, var: int) -> bool:
-        return isinstance(var, int) and self._num_main < var <= self.max_var
+        return _is_int(var) and self._num_main < var <= self.max_var
 
     def decode(self, model: Mapping[int, bool]) -> dict[Cell, Status]:
         """

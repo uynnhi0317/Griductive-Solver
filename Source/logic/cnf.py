@@ -15,7 +15,7 @@ def make_clause(literals: Iterable[Literal]) -> Clause | None:
     """
     lits = list(literals)
     for lit in lits:
-        if not isinstance(lit, int):
+        if not isinstance(lit, int) or isinstance(lit, bool):
             raise ValueError(f"[CNF]: Literal phải là số nguyên, nhận được {lit!r}")
         if lit == 0:
             raise ValueError("[CNF]: Literal không được bằng 0 (0 là dấu kết thúc mệnh đề trong DIMACS)")
@@ -27,7 +27,7 @@ def make_clause(literals: Iterable[Literal]) -> Clause | None:
     if any(-lit in unique for lit in unique):
         return None
     
-    return tuple(sorted(unique, key=abs))
+    return tuple(sorted(unique, key=lambda x: (abs(x), x)))
 
 
 class CNF:
@@ -39,10 +39,11 @@ class CNF:
     """
 
     def __init__(self, clauses: Iterable[Iterable[Literal]] = ()) -> None:
-        self._clauses: list[Clause] = []
+        self._clauses: dict[Clause, None] = {}
         self._max_var = 0
         self._has_empty = False
         self.tautologies_skipped = 0
+        self.duplicates_skipped = 0
         self.add_clauses(clauses)
 
     def add_clause(self, literals: Iterable[Literal]) -> None:
@@ -67,14 +68,16 @@ class CNF:
             self._append(clause)
 
         self.tautologies_skipped += other.tautologies_skipped
+        self.duplicates_skipped += other.duplicates_skipped
 
     def copy(self) -> "CNF":
         """Bản sao CNF độc lập"""
         new = CNF()
-        new._clauses = list(self._clauses)
+        new._clauses = dict(self._clauses)
         new._max_var = self._max_var
         new._has_empty = self._has_empty
         new.tautologies_skipped = self.tautologies_skipped
+        new.duplicates_skipped = self.duplicates_skipped
         return new
 
     @property
@@ -111,8 +114,11 @@ class CNF:
         return f"CNF(clauses={len(self._clauses)}, max_var={self._max_var})"
 
     def _append(self, clause: Clause) -> None:
-        """Thêm mệnh đề đã chuẩn hóa vào CNF"""
-        self._clauses.append(clause)
+        """Thêm mệnh đề đã chuẩn hóa vào CNF, bỏ qua nếu đã tồn tại"""
+        if clause in self._clauses:
+            self.duplicates_skipped += 1
+            return
+        self._clauses[clause] = None
         if clause:
             self._max_var = max(self._max_var, abs(clause[-1]))
         else:
