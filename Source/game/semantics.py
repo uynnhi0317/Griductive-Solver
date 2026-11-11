@@ -2,9 +2,13 @@
 Bộ đánh giá ngữ nghĩa trực tiếp (Semantic Evaluator) cho các clue.
 Kiểm tra một phép gán đầy đủ (Cell -> Status) có thỏa mãn clue hay không
 mà tuyệt đối không gọi qua bộ mã hóa CNF.
+
+Mở rộng: để hỗ trợ một loại clue mới, chỉ cần viết một hàm evaluator và gắn
+@register_evaluator(LoaiClueMoi) ngay trong file này (hoặc import module chứa
+evaluator mở rộng ở cuối file). Không cần sửa evaluate_clue.
 """
 
-from typing import Iterable, Mapping
+from typing import Callable, Iterable, Mapping
 
 from .board import Board
 from .cell import Cell
@@ -22,27 +26,70 @@ from .clue import (
 # Phép gán đầy đủ từ từng ô trên bàn cờ sang trạng thái CRIMINAL / INNOCENT
 Assignment = Mapping[Cell, Status]
 
+# Hàm đánh giá không validate: (clue, board, assignment) -> bool
+Evaluator = Callable[[Clue, Board, Assignment], bool]
 
+# Registry: loại clue -> evaluator. Decorator và registry cố ý nằm cùng một file
+# để tránh lỗi import vòng / import thiếu module khiến decorator không chạy.
+_EVALUATORS: dict[type[Clue], Evaluator] = {}
+
+
+def register_evaluator(*clue_classes: type[Clue]) -> Callable[[Evaluator], Evaluator]:
+    """Decorator đăng ký một hàm đánh giá cho một hay nhiều loại clue."""
+    if not clue_classes:
+        raise TypeError("[Semantics]: register_evaluator cần ít nhất một loại clue")
+
+    def decorator(fn: Evaluator) -> Evaluator:
+        for clue_cls in clue_classes:
+            if not (isinstance(clue_cls, type) and issubclass(clue_cls, Clue)):
+                raise TypeError(
+                    f"[Semantics]: {clue_cls!r} phải là lớp con của Clue"
+                )
+            if clue_cls in _EVALUATORS:
+                raise ValueError(
+                    f"[Semantics]: Đã có evaluator cho {clue_cls.__name__}"
+                )
+            _EVALUATORS[clue_cls] = fn
+        return fn
+
+    return decorator
+
+
+def _find_evaluator(clue: Clue) -> Evaluator:
+    """Tìm evaluator theo MRO để clue con (subclass) tự dùng lại evaluator của lớp cha."""
+    for cls in type(clue).__mro__:
+        evaluator = _EVALUATORS.get(cls)
+        if evaluator is not None:
+            return evaluator
+    raise TypeError(f"[Semantics]: Chưa hỗ trợ đánh giá loại clue {type(clue).__name__}")
+
+
+# ---------------------------------------------------------------- validation
 def validate_assignment(board: Board, assignment: Assignment) -> None:
     """
-    Kiểm tra assignment có chứa đầy đủ mọi ô trên board với kiểu Status hợp lệ hay không.
-    Ném ValueError nếu thiếu ô hoặc giá trị không phải là Status.
+    Kiểm tra assignment có đúng tập ô của board với kiểu Status hợp lệ hay không.
+    Ném ValueError nếu thiếu ô, thừa ô hoặc giá trị không phải là Status.
     """
-    missing: list[str] = []
-    for cell in board.cells():
-        if cell not in assignment:
-            missing.append(cell.label)
-            continue
-        status = assignment[cell]
-        if not isinstance(status, Status):
-            raise ValueError(
-                f"[Semantics]: Trạng thái tại ô {cell.label} phải là Status, nhận được {status!r}"
-            )
+    board_cells = set(board.cells())
 
+    missing = [c.label for c in board.cells() if c not in assignment]
     if missing:
         raise ValueError(
             f"[Semantics]: Assignment chưa đầy đủ, thiếu các ô: {', '.join(missing)}"
         )
+
+    extra = sorted(c.label for c in assignment if c not in board_cells)
+    if extra:
+        raise ValueError(
+            f"[Semantics]: Assignment có ô ngoài board: {', '.join(extra)}"
+        )
+
+    for cell in board.cells():
+        if not isinstance(assignment[cell], Status):
+            raise ValueError(
+                f"[Semantics]: Trạng thái tại ô {cell.label} phải là Status, "
+                f"nhận được {assignment[cell]!r}"
+            )
 
 
 def count_criminals(cells: Iterable[Cell], assignment: Assignment) -> int:
@@ -50,47 +97,77 @@ def count_criminals(cells: Iterable[Cell], assignment: Assignment) -> int:
     return sum(1 for cell in cells if assignment[cell] is Status.CRIMINAL)
 
 
-def evaluate_clue(clue: Clue, board: Board, assignment: Assignment) -> bool:
-    """
-    Đánh giá trực tiếp một clue có thỏa mãn dưới phép gán đầy đủ assignment hay không.
-    - Tự động gọi clue.validate(board) và validate_assignment(board, assignment).
-    - Tuyệt đối không sử dụng CNF.
-    """
+# evaluators
+@register_evaluator(FactClue)
+def _eval_fact(clue: FactClue, board: Board, assignment: Assignment) -> bool:
+    return assignment[clue.cell] is clue.status
+
+
+@register_evaluator(SameClue)
+def _eval_same(clue: SameClue, board: Board, assignment: Assignment) -> bool:
+    return assignment[clue.a] is assignment[clue.b]
+
+
+@register_evaluator(DifferentClue)
+def _eval_different(clue: DifferentClue, board: Board, assignment: Assignment) -> bool:
+    return assignment[clue.a] is not assignment[clue.b]
+
+
+def _criminals_in_region(
+    clue: ExactlyClue | AtLeastClue | AtMostClue,
+    board: Board,
+    assignment: Assignment,
+) -> int:
+    return count_criminals(clue.region.cells(board), assignment)
+
+
+@register_evaluator(ExactlyClue)
+def _eval_exactly(clue: ExactlyClue, board: Board, assignment: Assignment) -> bool:
+    return _criminals_in_region(clue, board, assignment) == clue.k
+
+
+@register_evaluator(AtLeastClue)
+def _eval_at_least(clue: AtLeastClue, board: Board, assignment: Assignment) -> bool:
+    return _criminals_in_region(clue, board, assignment) >= clue.k
+
+
+@register_evaluator(AtMostClue)
+def _eval_at_most(clue: AtMostClue, board: Board, assignment: Assignment) -> bool:
+    return _criminals_in_region(clue, board, assignment) <= clue.k
+
+
+# public API
+def _check_clue(clue: Clue, board: Board) -> None:
     if not isinstance(clue, Clue):
         raise TypeError(f"[Semantics]: clue phải là thể hiện của Clue, nhận được {clue!r}")
-
-    # 1. Kiểm tra tính hợp lệ của clue với board và của assignment
     clue.validate(board)
+
+
+def evaluate_clue_unchecked(clue: Clue, board: Board, assignment: Assignment) -> bool:
+    """
+    Dành cho vòng lặp nóng (vd. vét cạn 2^n assignment): bỏ qua mọi validate.
+    Người gọi tự đảm bảo clue và assignment hợp lệ, nên validate một lần trước vòng lặp.
+    """
+    return _find_evaluator(clue)(clue, board, assignment)
+
+
+def evaluate_clue(clue: Clue, board: Board, assignment: Assignment) -> bool:
+    """
+    Đánh giá trực tiếp một clue dưới phép gán đầy đủ.
+    Tự validate clue và assignment. Tuyệt đối không sử dụng CNF.
+    """
+    _check_clue(clue, board)
     validate_assignment(board, assignment)
-
-    # 2. Đánh giá theo từng loại template
-    if isinstance(clue, FactClue):
-        return assignment[clue.cell] is clue.status
-
-    if isinstance(clue, SameClue):
-        return assignment[clue.a] is assignment[clue.b]
-
-    if isinstance(clue, DifferentClue):
-        return assignment[clue.a] is not assignment[clue.b]
-
-    if isinstance(clue, ExactlyClue):
-        cells = clue.region.cells(board)
-        return count_criminals(cells, assignment) == clue.k
-
-    if isinstance(clue, AtLeastClue):
-        cells = clue.region.cells(board)
-        return count_criminals(cells, assignment) >= clue.k
-
-    if isinstance(clue, AtMostClue):
-        cells = clue.region.cells(board)
-        return count_criminals(cells, assignment) <= clue.k
-
-    raise TypeError(f"[Semantics]: Chưa hỗ trợ đánh giá loại clue {type(clue).__name__}")
+    return evaluate_clue_unchecked(clue, board, assignment)
 
 
-def evaluate_clues(
-    clues: Iterable[Clue], board: Board, assignment: Assignment
-) -> bool:
-    """Kiểm tra toàn bộ danh sách clue có đồng thời thỏa mãn với assignment hay không."""
+def evaluate_clues(clues: Iterable[Clue], board: Board, assignment: Assignment) -> bool:
+    """
+    Kiểm tra toàn bộ clue có đồng thời thỏa mãn hay không.
+    Validate assignment và từng clue đúng một lần.
+    """
+    clue_list = list(clues)
+    for clue in clue_list:
+        _check_clue(clue, board)
     validate_assignment(board, assignment)
-    return all(evaluate_clue(clue, board, assignment) for clue in clues)
+    return all(evaluate_clue_unchecked(c, board, assignment) for c in clue_list)
