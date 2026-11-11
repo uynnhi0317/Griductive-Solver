@@ -1,11 +1,8 @@
 """
 Bộ đánh giá ngữ nghĩa trực tiếp (Semantic Evaluator) cho các clue.
-Kiểm tra một phép gán đầy đủ (Cell -> Status) có thỏa mãn clue hay không
-mà tuyệt đối không gọi qua bộ mã hóa CNF.
 
 Mở rộng: để hỗ trợ một loại clue mới, chỉ cần viết một hàm evaluator và gắn
-@register_evaluator(LoaiClueMoi) ngay trong file này (hoặc import module chứa
-evaluator mở rộng ở cuối file). Không cần sửa evaluate_clue.
+@register_evaluator(LoaiClueMoi).
 """
 
 from typing import Callable, Iterable, Mapping
@@ -29,8 +26,6 @@ Assignment = Mapping[Cell, Status]
 # Hàm đánh giá không validate: (clue, board, assignment) -> bool
 Evaluator = Callable[[Clue, Board, Assignment], bool]
 
-# Registry: loại clue -> evaluator. Decorator và registry cố ý nằm cùng một file
-# để tránh lỗi import vòng / import thiếu module khiến decorator không chạy.
 _EVALUATORS: dict[type[Clue], Evaluator] = {}
 
 
@@ -64,7 +59,7 @@ def _find_evaluator(clue: Clue) -> Evaluator:
     raise TypeError(f"[Semantics]: Chưa hỗ trợ đánh giá loại clue {type(clue).__name__}")
 
 
-# ---------------------------------------------------------------- validation
+# validation
 def validate_assignment(board: Board, assignment: Assignment) -> None:
     """
     Kiểm tra assignment có đúng tập ô của board với kiểu Status hợp lệ hay không.
@@ -144,17 +139,14 @@ def _check_clue(clue: Clue, board: Board) -> None:
 
 
 def evaluate_clue_unchecked(clue: Clue, board: Board, assignment: Assignment) -> bool:
-    """
-    Dành cho vòng lặp nóng (vd. vét cạn 2^n assignment): bỏ qua mọi validate.
-    Người gọi tự đảm bảo clue và assignment hợp lệ, nên validate một lần trước vòng lặp.
-    """
+    """Đánh giá clue mà không thực hiện kiểm tra tính hợp lệ."""
     return _find_evaluator(clue)(clue, board, assignment)
 
 
 def evaluate_clue(clue: Clue, board: Board, assignment: Assignment) -> bool:
     """
     Đánh giá trực tiếp một clue dưới phép gán đầy đủ.
-    Tự validate clue và assignment. Tuyệt đối không sử dụng CNF.
+    Tự validate clue và assignment.
     """
     _check_clue(clue, board)
     validate_assignment(board, assignment)
