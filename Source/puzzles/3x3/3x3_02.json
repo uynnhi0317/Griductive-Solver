@@ -1,0 +1,131 @@
+{
+  "id": "3x3_02",
+  "title": "The Crowded Square",
+  "description": "A neighbor count around the center card is revealed early but only becomes useful at the very end.",
+  "size": 3,
+  "characters": {
+    "A1": {
+      "name": "Anna",
+      "profession": "Artist"
+    },
+    "B1": {
+      "name": "Ben",
+      "profession": "Builder"
+    },
+    "C1": {
+      "name": "Cole",
+      "profession": "Cook"
+    },
+    "A2": {
+      "name": "Dina",
+      "profession": "Dancer"
+    },
+    "B2": {
+      "name": "Ezra",
+      "profession": "Editor"
+    },
+    "C2": {
+      "name": "Faye",
+      "profession": "Florist"
+    },
+    "A3": {
+      "name": "Gus",
+      "profession": "Gardener"
+    },
+    "B3": {
+      "name": "Hana",
+      "profession": "Healer"
+    },
+    "C3": {
+      "name": "Ian",
+      "profession": "Inventor"
+    }
+  },
+  "solution": {
+    "A1": "INNOCENT",
+    "B1": "INNOCENT",
+    "C1": "CRIMINAL",
+    "A2": "CRIMINAL",
+    "B2": "CRIMINAL",
+    "C2": "INNOCENT",
+    "A3": "INNOCENT",
+    "B3": "INNOCENT",
+    "C3": "CRIMINAL"
+  },
+  "clues": {
+    "A1": {
+      "type": "EXACTLY",
+      "k": 2,
+      "region": {
+        "type": "CELLS",
+        "cells": [
+          "A2",
+          "B2"
+        ]
+      }
+    },
+    "B1": {
+      "type": "AT_LEAST",
+      "k": 1,
+      "region": {
+        "type": "ROW",
+        "number": 1
+      }
+    },
+    "C1": {
+      "type": "DIFFERENT",
+      "cells": [
+        "C1",
+        "C2"
+      ]
+    },
+    "A2": {
+      "type": "DIFFERENT",
+      "cells": [
+        "A2",
+        "A3"
+      ]
+    },
+    "B2": {
+      "type": "EXACTLY",
+      "k": 3,
+      "region": {
+        "type": "NEIGHBORS",
+        "cell": "B2"
+      }
+    },
+    "C2": {
+      "type": "EXACTLY",
+      "k": 2,
+      "region": {
+        "type": "ROW",
+        "number": 2
+      }
+    },
+    "A3": {
+      "type": "SAME",
+      "cells": [
+        "A3",
+        "B3"
+      ]
+    },
+    "B3": {
+      "type": "EXACTLY",
+      "k": 1,
+      "region": {
+        "type": "ROW",
+        "number": 3
+      }
+    },
+    "C3": {
+      "type": "SAME",
+      "cells": [
+        "C1",
+        "C3"
+      ]
+    }
+  },
+  "initially_revealed": [
+    "A1"
+  ]
+}

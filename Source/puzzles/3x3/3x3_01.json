@@ -1,0 +1,130 @@
+{
+  "id": "3x3_01",
+  "title": "First Shift",
+  "description": "Introductory case: one face-up card and a straight chain of deductions using all six core clue templates.",
+  "size": 3,
+  "characters": {
+    "A1": {
+      "name": "Alice",
+      "profession": "Actor"
+    },
+    "B1": {
+      "name": "Bob",
+      "profession": "Baker"
+    },
+    "C1": {
+      "name": "Cara",
+      "profession": "Chef"
+    },
+    "A2": {
+      "name": "Dan",
+      "profession": "Doctor"
+    },
+    "B2": {
+      "name": "Eve",
+      "profession": "Engineer"
+    },
+    "C2": {
+      "name": "Finn",
+      "profession": "Farmer"
+    },
+    "A3": {
+      "name": "Gina",
+      "profession": "Guard"
+    },
+    "B3": {
+      "name": "Hugo",
+      "profession": "Hunter"
+    },
+    "C3": {
+      "name": "Ivy",
+      "profession": "Interpreter"
+    }
+  },
+  "solution": {
+    "A1": "CRIMINAL",
+    "B1": "INNOCENT",
+    "C1": "INNOCENT",
+    "A2": "INNOCENT",
+    "B2": "INNOCENT",
+    "C2": "CRIMINAL",
+    "A3": "INNOCENT",
+    "B3": "CRIMINAL",
+    "C3": "INNOCENT"
+  },
+  "clues": {
+    "A1": {
+      "type": "EXACTLY",
+      "k": 1,
+      "region": {
+        "type": "COLUMN",
+        "letter": "A"
+      }
+    },
+    "B1": {
+      "type": "DIFFERENT",
+      "cells": [
+        "A1",
+        "B1"
+      ]
+    },
+    "C1": {
+      "type": "SAME",
+      "cells": [
+        "C1",
+        "A2"
+      ]
+    },
+    "A2": {
+      "type": "AT_LEAST",
+      "k": 1,
+      "region": {
+        "type": "ROW",
+        "number": 2
+      }
+    },
+    "B2": {
+      "type": "EXACTLY",
+      "k": 0,
+      "region": {
+        "type": "CELLS",
+        "cells": [
+          "B1",
+          "C1"
+        ]
+      }
+    },
+    "C2": {
+      "type": "EXACTLY",
+      "k": 2,
+      "region": {
+        "type": "NEIGHBORS",
+        "cell": "C3"
+      }
+    },
+    "A3": {
+      "type": "FACT",
+      "cell": "B3",
+      "status": "CRIMINAL"
+    },
+    "B3": {
+      "type": "AT_MOST",
+      "k": 1,
+      "region": {
+        "type": "ROW",
+        "number": 3
+      }
+    },
+    "C3": {
+      "type": "AT_MOST",
+      "k": 1,
+      "region": {
+        "type": "COLUMN",
+        "letter": "B"
+      }
+    }
+  },
+  "initially_revealed": [
+    "B2"
+  ]
+}

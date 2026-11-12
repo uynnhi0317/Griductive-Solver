@@ -1,0 +1,128 @@
+{
+  "id": "3x3_04",
+  "title": "The Night Shift",
+  "description": "A guided 3x3 case introducing binary clues and every required region.",
+  "size": 3,
+  "characters": {
+    "A1": {
+      "name": "Avery",
+      "profession": "Archivist"
+    },
+    "B1": {
+      "name": "Blair",
+      "profession": "Baker"
+    },
+    "C1": {
+      "name": "Casey",
+      "profession": "Chemist"
+    },
+    "A2": {
+      "name": "Drew",
+      "profession": "Detective"
+    },
+    "B2": {
+      "name": "Emery",
+      "profession": "Engineer"
+    },
+    "C2": {
+      "name": "Flynn",
+      "profession": "Farmer"
+    },
+    "A3": {
+      "name": "Gray",
+      "profession": "Guard"
+    },
+    "B3": {
+      "name": "Harper",
+      "profession": "Historian"
+    },
+    "C3": {
+      "name": "Indigo",
+      "profession": "Illustrator"
+    }
+  },
+  "solution": {
+    "A1": "CRIMINAL",
+    "B1": "INNOCENT",
+    "C1": "CRIMINAL",
+    "A2": "INNOCENT",
+    "B2": "CRIMINAL",
+    "C2": "INNOCENT",
+    "A3": "INNOCENT",
+    "B3": "CRIMINAL",
+    "C3": "CRIMINAL"
+  },
+  "clues": {
+    "A1": {
+      "type": "AT_MOST",
+      "k": 1,
+      "region": {
+        "type": "NEIGHBORS",
+        "cell": "A1"
+      }
+    },
+    "B1": {
+      "type": "AT_LEAST",
+      "k": 2,
+      "region": {
+        "type": "CELLS",
+        "cells": [
+          "C1",
+          "A2",
+          "B3"
+        ]
+      }
+    },
+    "C1": {
+      "type": "SAME",
+      "cells": [
+        "C1",
+        "B2"
+      ]
+    },
+    "A2": {
+      "type": "FACT",
+      "cell": "A3",
+      "status": "INNOCENT"
+    },
+    "B2": {
+      "type": "DIFFERENT",
+      "cells": [
+        "B2",
+        "A2"
+      ]
+    },
+    "C2": {
+      "type": "DIFFERENT",
+      "cells": [
+        "C2",
+        "C3"
+      ]
+    },
+    "A3": {
+      "type": "EXACTLY",
+      "k": 2,
+      "region": {
+        "type": "ROW",
+        "number": 3
+      }
+    },
+    "B3": {
+      "type": "EXACTLY",
+      "k": 2,
+      "region": {
+        "type": "COLUMN",
+        "letter": "C"
+      }
+    },
+    "C3": {
+      "type": "FACT",
+      "cell": "A1",
+      "status": "CRIMINAL"
+    }
+  },
+  "initially_revealed": [
+    "A1",
+    "B2"
+  ]
+}
