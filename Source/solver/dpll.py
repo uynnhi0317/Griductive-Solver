@@ -248,6 +248,7 @@ def solve(
     assumed = make_clause(assumptions)
     n = max(num_vars or 0, cnf.max_var(), max((abs(lit) for lit in (assumed or ())), default=0))
 
+    # Thực hiện giải và đo thời gian
     start = time.perf_counter()
     deadline = None if time_limit is None else start + time_limit
     solver = _Solver(cnf.clauses, deadline, start, pure_literal)
