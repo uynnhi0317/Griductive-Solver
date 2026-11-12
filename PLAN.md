@@ -235,12 +235,8 @@ Bảng phân công chi tiết theo từng thành viên sẽ được cập nhậ
 ```bash
 # Tạo môi trường ảo
 python -m venv .venv
-
-# Kích hoạt môi trường ảo
-# Windows (PowerShell):
-.venv\Scripts\Activate.ps1
-# Linux / macOS:
-source .venv/bin/activate
+.venv\Scripts\activate          # Windows
+# source .venv/bin/activate     # macOS / Linux
 
 # Cài đặt toàn bộ thư viện cần thiết
 pip install -r requirements.txt
