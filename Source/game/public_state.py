@@ -91,7 +91,7 @@ class PublicState:
 
 
 def _check_card(board: Board, card: RevealedCard, known: Mapping[Cell, RevealedCard]) -> None:
-    """Kiểm tra một thẻ trước khi thêm vào state"""
+    """Kiểm tra một thẻ trước khi thêm vào state: ô, trạng thái, và clue hợp lệ với board"""
     if not isinstance(card, RevealedCard):
         raise ValueError(f"[PublicState]: Phần tử phải là RevealedCard, nhận được {card!r}")
     if not board.contains(card.cell):
@@ -102,3 +102,5 @@ def _check_card(board: Board, card: RevealedCard, known: Mapping[Cell, RevealedC
         raise ValueError(f"[PublicState]: Trạng thái không hợp lệ: {card.status!r}")
     if not isinstance(card.clue, Clue):
         raise ValueError(f"[PublicState]: Clue không hợp lệ: {card.clue!r}")
+    card.clue.validate(board)
+    

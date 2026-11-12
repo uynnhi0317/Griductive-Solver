@@ -3,10 +3,10 @@
 
 Định dạng JSON cho puzzle N x N (1 <= N <= Board.MAX_SIZE)
 Mọi ô dùng nhãn '<cột><hàng>': cột là chữ cái từ 'A', hàng là số từ 1 (vd. 'A1', 'C2').
-{   
+{
+  "id": "<định danh puzzle>",
   "title": "<tên màn chơi>",                                                # tuỳ chọn, mặc định ""
   "description": "<mô tả ngắn>",                                            # tuỳ chọn, mặc định ""
-  "id": "<định danh puzzle>",
   "size": N,
   "characters": {"<ô>": {"name": "<tên>", "profession": "<nghề>"}, ...},   # đủ N*N ô, tên phân biệt
   "solution":   {"<ô>": "CRIMINAL" | "INNOCENT", ...},                     # đáp án ẩn, đủ N*N ô
@@ -40,6 +40,7 @@ from .cell import Cell
 from .character import Status
 from .clue import Clue, clue_from_dict
 from .public_state import PublicState, RevealedCard
+from .semantics import evaluate_clue_unchecked
 
 T = TypeVar("T")
 
@@ -87,6 +88,7 @@ class PuzzleFull:
         object.__setattr__(self, "solution", MappingProxyType({c: self.solution[c] for c in cells}))
         object.__setattr__(self, "clues", MappingProxyType({c: self.clues[c] for c in cells}))
         object.__setattr__(self, "initially_revealed", tuple(self.initially_revealed))
+        self._validate_clues_hold()
 
     def initial_state(self) -> PublicState:
         """PublicState ban đầu: chỉ gồm các thẻ mở sẵn"""
@@ -108,6 +110,15 @@ class PuzzleFull:
             "clues": {c.label: self.clues[c].to_dict() for c in cells},
             "initially_revealed": [c.label for c in self.initially_revealed],
         }
+
+    def _validate_clues_hold(self) -> None:
+        """Mọi clue phải đúng với đáp án; clue và solution đã được kiểm tra ở trên nên dùng bản unchecked"""
+        wrong = [
+            cell.label for cell, clue in self.clues.items()
+            if not evaluate_clue_unchecked(clue, self.board, self.solution)
+        ]
+        if wrong:
+            raise ValueError(f"[Puzzle]: Clue mâu thuẫn với đáp án tại: {', '.join(wrong)}")
 
     def _validate_initially_revealed(self) -> None:
         revealed = self.initially_revealed
@@ -202,7 +213,7 @@ def _optional_text(data: Mapping[str, Any], field: str) -> str:
     if not isinstance(value, str):
         raise ValueError(f"'{field}' phải là chuỗi, nhận được {type(value).__name__}")
     return value
-    
+
 
 def _parse_clue(raw: Any) -> Clue:
     return clue_from_dict(_require_mapping(raw, "clue"))
