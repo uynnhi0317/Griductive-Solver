@@ -73,14 +73,71 @@ def test_unit_chain_needs_no_decision():
     assert r.stats.backtracks == 0
 
 
-def test_backtracking_case_and_counting_convention():
+def test_backtracking_counting_without_pure_literal():
     # biến 1 thử False trước: ép 2 = True rồi conflict -> backtrack, thử True
-    r = solve(CNF([[1, 2], [1, -2]]))
+    r = solve(CNF([[1, 2], [1, -2]]), pure_literal=False)
     assert r.sat
     assert r.model == {1: True, 2: False}
     assert r.stats.decisions == 2
     assert r.stats.propagations == 1
     assert r.stats.backtracks == 1
+    assert r.stats.pure_literals == 0
+
+
+@pytest.mark.parametrize("pure", [True, False])
+def test_backtracking_counting_when_no_pure_literal_exists(pure):
+    # mọi biến đều có cả hai dấu nên pure literal không can thiệp: hai chế độ cho cùng số liệu
+    cnf = CNF([[1, 2], [1, -2], [-1, 3], [-2, -3]])
+    r = solve(cnf, pure_literal=pure)
+    assert r.sat
+    assert r.model == {1: True, 2: False, 3: True}
+    assert (r.stats.decisions, r.stats.propagations, r.stats.backtracks) == (2, 3, 1)
+    assert r.stats.pure_literals == 0
+
+
+# ---------- pure literal elimination ----------
+def test_pure_literal_is_assigned_without_decision():
+    r = solve(CNF([[1, 2], [1, -2]]))
+    assert r.sat
+    assert r.model == {1: True, 2: False}
+    s = r.stats
+    assert (s.decisions, s.propagations, s.backtracks, s.pure_literals) == (0, 0, 0, 1)
+
+
+def test_pure_literals_cascade():
+    # biến 1 thuần -> mệnh đề (1 2) thỏa -> biến 2 chỉ còn dấu âm -> thuần
+    r = solve(CNF([[1, 2], [-2, 3], [-2, -3]]))
+    assert r.sat
+    assert r.model == {1: True, 2: False, 3: False}
+    assert (r.stats.decisions, r.stats.propagations, r.stats.pure_literals) == (0, 0, 2)
+
+
+def test_pure_literal_ignores_satisfied_clauses():
+    # sau khi 1 = True, mệnh đề (1 -2) đã thỏa nên biến 2 chỉ còn xuất hiện dương -> thuần
+    r = solve(CNF([[1], [1, -2], [2, 3]]))
+    assert r.sat
+    assert r.model == {1: True, 2: True, 3: True}
+    assert (r.stats.decisions, r.stats.propagations, r.stats.pure_literals) == (0, 1, 2)
+
+
+def test_pure_literal_can_be_disabled():
+    cnf = CNF([[1, 2], [-2, 3], [-2, -3]])
+    r = solve(cnf, pure_literal=False)
+    assert r.sat and check_model(cnf, r.model)
+    assert r.stats.pure_literals == 0
+
+
+def test_pure_literal_never_overrides_assumptions():
+    cnf = CNF([[1, 2], [1, 3]])           # biến 1 thuần dương
+    r = solve(cnf, assumptions=[-1])
+    assert r.sat
+    assert r.model[1] is False and r.model[2] is True and r.model[3] is True
+
+
+@pytest.mark.parametrize("bad", [1, 0, None, "yes"])
+def test_invalid_pure_literal_flag(bad):
+    with pytest.raises(ValueError):
+        solve(CNF(), pure_literal=bad)
 
 
 def test_all_four_clauses_on_two_vars_is_unsat():
@@ -174,13 +231,14 @@ def random_cnf(rng, n):
     return cnf
 
 
-def test_matches_brute_force_on_random_cnfs():
+@pytest.mark.parametrize("pure", [True, False])
+def test_matches_brute_force_on_random_cnfs(pure):
     rng = random.Random(2026)
     sat_seen = unsat_seen = 0
     for _ in range(400):
         n = rng.randint(2, 8)
         cnf = random_cnf(rng, n)
-        r = solve(cnf, num_vars=n)
+        r = solve(cnf, num_vars=n, pure_literal=pure)
         expected = brute_force_sat(list(cnf), n)
         assert r.sat == expected, list(cnf)
         if r.sat:
@@ -193,13 +251,14 @@ def test_matches_brute_force_on_random_cnfs():
     assert sat_seen > 20 and unsat_seen > 20  # bộ dữ liệu có cả hai loại
 
 
-def test_matches_brute_force_with_assumptions():
+@pytest.mark.parametrize("pure", [True, False])
+def test_matches_brute_force_with_assumptions(pure):
     rng = random.Random(7)
     for _ in range(300):
         n = rng.randint(2, 7)
         cnf = random_cnf(rng, n)
         assumptions = [rng.choice([-1, 1]) * v for v in rng.sample(range(1, n + 1), rng.randint(1, min(3, n)))]
-        r = solve(cnf, num_vars=n, assumptions=assumptions)
+        r = solve(cnf, num_vars=n, assumptions=assumptions, pure_literal=pure)
         extended = list(cnf) + [(a,) for a in assumptions]
         assert r.sat == brute_force_sat(extended, n), (list(cnf), assumptions)
         if r.sat:
@@ -251,11 +310,13 @@ def test_invalid_time_limit(bad):
 
 
 def test_stats_merge_and_as_dict():
-    a = SolverStats(decisions=1, propagations=2, backtracks=3, runtime=0.5)
-    b = SolverStats(decisions=10, propagations=20, backtracks=30, runtime=1.5)
+    a = SolverStats(decisions=1, propagations=2, pure_literals=4, backtracks=3, runtime=0.5)
+    b = SolverStats(decisions=10, propagations=20, pure_literals=40, backtracks=30, runtime=1.5)
     a.merge(b)
-    assert a.as_dict() == {"decisions": 11, "propagations": 22, "backtracks": 33, "runtime": 2.0}
-    assert list(a.as_dict()) == ["decisions", "propagations", "backtracks", "runtime"]
+    assert a.as_dict() == {
+        "decisions": 11, "propagations": 22, "pure_literals": 44, "backtracks": 33, "runtime": 2.0,
+    }
+    assert list(a.as_dict()) == ["decisions", "propagations", "pure_literals", "backtracks", "runtime"]
 
 
 def test_solver_modules_do_not_import_game():
