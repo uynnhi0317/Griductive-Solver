@@ -58,6 +58,10 @@ class CharacterCard:
             self.flip_t = max(self._target, self.flip_t - step)
 
     #________________________________________________________________show
+    def _convert_Status_str(self) -> str | None:
+        if (not self.model.face_up): return None
+        return "an innocent" if self.model.status == Status.INNOCENT else "a criminal"
+
     def _render_face(self, color) -> pygame.Surface:
         w, h = self.rect.size
         face = pygame.Surface((w, h), pygame.SRCALPHA)
@@ -66,6 +70,11 @@ class CharacterCard:
         char = self.model.character
         name = fit_font(char.name, h // 5, w - 12).render(char.name, True, PALETTE["text"])
         job = fit_font(char.profession, h//7, w - 12).render(char.profession, True, PALETTE["text"])
+        if (self.model.face_up):
+            s_str = self._convert_Status_str()
+            status = fit_font(s_str, h//10, w - 12).render(f"is {s_str}", True, PALETTE["text"])
+            face.blit(status, status.get_rect(center=(w // 2, h * 9 // 10)))
+            
         face.blit(name, name.get_rect(center=(w // 2, h * 2 // 5)))
         face.blit(job, job.get_rect(center=(w // 2, h * 3 // 5)))
         return face
