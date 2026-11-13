@@ -30,9 +30,9 @@ class CharacterCard:
     #______________________________________________________setting up
     def _set_model(self, model: CardModel) -> None:
         self.model = model
-        self._front = self._render_face(STATUS_COLOR[model.status]) if model.face_up else None
         self._back = self._render_face(PALETTE["card_back"])
-
+        self._front = (self._render_face(STATUS_COLOR[model.status], model.status.value)
+                    if model.face_up else None)
     #______________________________________________________on change
         
     def sync(self, model: CardModel) -> None:
@@ -58,25 +58,21 @@ class CharacterCard:
             self.flip_t = max(self._target, self.flip_t - step)
 
     #________________________________________________________________show
-    def _convert_Status_str(self) -> str | None:
-        if (not self.model.face_up): return None
-        return "an innocent" if self.model.status == Status.INNOCENT else "a criminal"
-
-    def _render_face(self, color) -> pygame.Surface:
+    def _render_face(self, color, status_text: str | None = None) -> pygame.Surface:
         w, h = self.rect.size
         face = pygame.Surface((w, h), pygame.SRCALPHA)
         pygame.draw.rect(face, color, face.get_rect(), border_radius=self.RADIUS)
 
-        char = self.model.character
-        name = fit_font(char.name, h // 5, w - 12).render(char.name, True, PALETTE["text"])
-        job = fit_font(char.profession, h//7, w - 12).render(char.profession, True, PALETTE["text"])
-        if (self.model.face_up):
-            s_str = self._convert_Status_str()
-            status = fit_font(s_str, h//10, w - 12).render(f"is {s_str}", True, PALETTE["text"])
-            face.blit(status, status.get_rect(center=(w // 2, h * 9 // 10)))
-            
+        ch = self.model.character
+        name = fit_font(ch.name, h // 5, w - 12).render(ch.name, True, PALETTE["text"])
+        job = fit_font(ch.profession, h // 7, w - 12).render(ch.profession, True, PALETTE["text"])
         face.blit(name, name.get_rect(center=(w // 2, h * 2 // 5)))
         face.blit(job, job.get_rect(center=(w // 2, h * 3 // 5)))
+
+        if status_text:
+            label = f"is {status_text}"
+            txt = fit_font(label, h // 10, w - 12).render(label, True, PALETTE["text"])
+            face.blit(txt, txt.get_rect(center=(w // 2, h * 4 // 5)))
         return face
 
     def _showing_front(self) -> bool:
