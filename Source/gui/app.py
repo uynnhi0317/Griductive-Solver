@@ -33,17 +33,18 @@ class App:
         self.board.refresh(state)
 
     def _load_stage(self, index: int) -> bool:
-        self.stage_index = index % len(self.stages)
-        path = self.stages[self.stage_index]
+        index %= len(self.stages)
+        path = self.stages[index]
         try:
             puzzle = load_puzzle(path)
         except PuzzleFormatError as exc:
             print(f"[App] Không tải được puzzle {self.stages[index].name}: {exc}")
             return False
-        
+
         self.state: PublicState = puzzle.initial_state()
-        self.board = BoardView(self.state, pygame.Surface(self.screen.get_size()).get_rect())
-        self.selected = None
+        self.board = BoardView(self.state, self.screen.get_rect())
+        self.stage_index = index
+        self.selected = self.hovered = None
         pygame.display.set_caption(f"Griductive Solver - {puzzle.title or puzzle.puzzle_id}")
         return True
     

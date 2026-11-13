@@ -65,7 +65,7 @@ class CharacterCard:
 
         char = self.model.character
         name = fit_font(char.name, h // 5, w - 12).render(char.name, True, PALETTE["text"])
-        job = get_font(h//7).render(char.profession, True, PALETTE["text"])
+        job = fit_font(char.profession, h//7, w - 12).render(char.profession, True, PALETTE["text"])
         face.blit(name, name.get_rect(center=(w // 2, h * 2 // 5)))
         face.blit(job, job.get_rect(center=(w // 2, h * 3 // 5)))
         return face
@@ -83,8 +83,8 @@ class CharacterCard:
 
         if selected:
             key = SELECT_COLOR[self.model.status] if front else PALETTE["select_card_back"]
-            draw_rect_alpha(surface, PALETTE["selected"], r, self.RADIUS)
             pygame.draw.rect(surface, key, r, width=min(3, max(1, w // 2)), border_radius=self.RADIUS)
+            draw_rect_alpha(surface, PALETTE["selected"], r, self.RADIUS)
         elif hovered:
             pygame.draw.rect(surface, PALETTE["hover"], r, width=min(2, max(1, w // 2)), border_radius=self.RADIUS)
             draw_rect_alpha(surface, PALETTE["hover"], r, self.RADIUS)

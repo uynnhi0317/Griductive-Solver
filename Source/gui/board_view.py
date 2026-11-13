@@ -22,8 +22,8 @@ class BoardView:
         self.cell_size = max(5, (avail - (self.n - 1)*self.gap) // self.n)
         self.pitch = self.cell_size + self.gap
         board_px = self.n * self.cell_size + (self.n - 1) * self.gap
-        self.o_x = (w - board_px) // 2 + LABEL_MARGIN // 2
-        self.o_y = (h - board_px) // 2 + LABEL_MARGIN // 2
+        self.o_x = area.x + (w - board_px) // 2 + LABEL_MARGIN // 2
+        self.o_y = area.y + (h - board_px) // 2 + LABEL_MARGIN // 2
 
     def fit(self, area: pygame.Rect) -> None:
         self._compute_layout(area)
