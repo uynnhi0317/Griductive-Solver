@@ -52,7 +52,7 @@ class App:
         if e.type == pygame.QUIT:
             self.running = False
         elif e.type == pygame.VIDEORESIZE:
-            self.board.fit(self.screen.get_size())
+            self.board.fit(self.screen.get_rect())
         elif e.type == pygame.MOUSEMOTION:
             self.hovered = self.board.cell_at_pixel(e.pos)
         elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
