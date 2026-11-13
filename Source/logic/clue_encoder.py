@@ -67,7 +67,7 @@ def _encode_same(clue: SameClue, vmap: VariableMap) -> CNF:
 
 @register_encoder(DifferentClue)
 def _encode_different(clue: DifferentClue, vmap: VariableMap) -> CNF:
-    # Ci xor Cj  ==  (Ci ∨ Cj) ∧ (¬Ci ∨ Cj)
+    # Ci xor Cj  ==  (Ci ∨ Cj) ∧ (¬Ci ∨ ¬Cj)
     a, b = vmap.var(clue.a), vmap.var(clue.b)
     return CNF([[a, b], [-a, -b]])
 
