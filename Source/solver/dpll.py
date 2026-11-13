@@ -120,7 +120,7 @@ class _Solver:
         return True
 
     def eliminate_pure_literals(self) -> None:
-        """Pure-litaral elimination nếu chỉ có positive hoặc negative literal của 1 biến"""
+        """Pure-literal elimination nếu chỉ có positive hoặc negative literal của 1 biến"""
         assignment = self.assignment
         while True:
             seen: dict[int, int] = {}
@@ -189,7 +189,7 @@ class _Solver:
         mark = len(self.assignment)
         # Unit propagation
         if not self.propagate():
-            # Conflict: Trả về assignment như ban đầu và rẻ nhánh
+            # Conflict: Trả về assignment như ban đầu và rẽ nhánh
             self.undo_to(mark)
             return False
 
