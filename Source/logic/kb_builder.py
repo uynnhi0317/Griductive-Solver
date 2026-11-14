@@ -27,8 +27,8 @@ class KnowledgeBase:
     vmap: VariableMap
     stats: EncodingStats
     clue_ids: tuple[str, ...]   # định danh các clue đang có trong KB_t, theo thứ tự lật
-    clue_clauses: int           # số mệnh đề sinh ra từ phần CNF(clue đã lộ)
-    verdict_units: int          # số verdict đã chứng minh được thêm dưới dạng unit clause
+    clue_clauses: int           # số mệnh đề phân biệt từ phần CNF(clue đã lộ), sau khi bỏ trùng và tautology
+    verdict_units: int          # số unit clause verdict thực sự được thêm (verdict trùng mệnh đề đã có không được tính)
 
     @property
     def num_vars(self) -> int:
@@ -61,6 +61,7 @@ def build_kb(state: PublicState) -> KnowledgeBase:
     verdicts = state.verdicts()
     for cell, status in verdicts.items():
         cnf.add_clause([vmap.status_literal(cell, status)])
+    verdict_units = len(cnf) - clue_clauses
 
     return KnowledgeBase(
         cnf=cnf,
@@ -68,5 +69,5 @@ def build_kb(state: PublicState) -> KnowledgeBase:
         stats=compute_stats(cnf, vmap),
         clue_ids=state.active_clue_ids(),
         clue_clauses=clue_clauses,
-        verdict_units=len(verdicts),
+        verdict_units=verdict_units,
     )
