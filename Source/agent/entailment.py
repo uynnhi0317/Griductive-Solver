@@ -58,6 +58,7 @@ class Verdict(Enum):
 
 @dataclass(frozen=True)
 class SatQuery:
+    """Một lần gọi SAT solver"""
     label: str                  # mô tả truy vấn
     assumption: int | None      # literal tạm thời, None nếu chỉ kiểm tra KB
     sat: bool
@@ -154,7 +155,8 @@ def classify_var(
 ) -> VarClassification:
     """
     Phân loại một biến trên CNF bất kỳ
-    + check_consistency=False khi nơi gọi đã chắc chắn CNF SAT
+    + check_consistency=False CHỈ dùng khi nơi gọi đã chứng minh CNF SAT;
+      nếu CNF UNSAT mà tắt kiểm tra thì kết quả sai (luôn ra CRIMINAL)
     + name: tên hiển thị của biến trong label truy vấn
     + pool: nếu có, dùng model đã biết để bỏ qua truy vấn chắc chắn SAT,
       và thêm model của mọi truy vấn SAT mới vào pool
@@ -210,10 +212,10 @@ class EntailmentChecker:
 
     def __init__(self, state: PublicState, time_limit: float | None = None,
                  reuse_models: bool = True) -> None:
-        if not isinstance(reuse_models, bool):
-            raise ValueError(f"[Entailment]: reuse_models phải là bool, nhận được {reuse_models!r}")
         if not isinstance(state, PublicState):
             raise TypeError(f"[Entailment]: Chỉ nhận PublicState, nhận được {type(state).__name__}")
+        if not isinstance(reuse_models, bool):
+            raise ValueError(f"[Entailment]: reuse_models phải là bool, nhận được {reuse_models!r}")
         self._state = state
         self._time_limit = time_limit
         self._kb = build_kb(state)
