@@ -18,8 +18,19 @@ class Region(ABC):
         """Chuyển vùng thành dict để lưu vào JSON"""
 
     @abstractmethod
-    def describe(self) -> str:
+    def describe(self, board: Board | None = None) -> str:
         """Mô tả của vùng để hiển thị"""
+
+def join_names(names: list[str]) -> str:
+    """Nối danh sách tên: 'A', 'A and B', 'A, B and C'"""
+    if len(names) <= 1:
+        return "".join(names)
+    return ", ".join(names[:-1]) + " and " + names[-1]
+
+
+def possessive(name: str) -> str:
+    """Sở hữu cách: Eve -> Eve's, James -> James'"""
+    return f"{name}'" if name.endswith("s") else f"{name}'s"
 
 
 @dataclass(frozen=True)
@@ -37,7 +48,7 @@ class Row(Region):
     def to_dict(self) -> dict[str, Any]:
         return {"type": "ROW", "number": self.number}
 
-    def describe(self) -> str:
+    def describe(self, board: Board | None = None) -> str:
         return f"row {self.number}"
 
 
@@ -56,7 +67,7 @@ class Column(Region):
     def to_dict(self) -> dict[str, Any]:
         return {"type": "COLUMN", "letter": self.letter}
 
-    def describe(self) -> str:
+    def describe(self, board: Board | None = None) -> str:
         return f"column {self.letter}"
 
 
@@ -71,8 +82,10 @@ class Neighbors(Region):
     def to_dict(self) -> dict[str, Any]:
         return {"type": "NEIGHBORS", "cell": self.center.label}
 
-    def describe(self) -> str:
-        return f"neighbors of {self.center.label}"
+    def describe(self, board: Board | None = None) -> str:
+        if board is None:
+            return f"neighbors of {self.center.label}"
+        return f"{possessive(board.character_at(self.center).name)} neighbors"
 
 
 @dataclass(frozen=True)
@@ -98,8 +111,10 @@ class ExplicitList(Region):
     def to_dict(self) -> dict[str, Any]:
         return {"type": "CELLS", "cells": [c.label for c in self.members]}
 
-    def describe(self) -> str:
-        return "cells " + ", ".join(c.label for c in self.members)
+    def describe(self, board: Board | None = None) -> str:
+        if board is None:
+            return "cells " + ", ".join(c.label for c in self.members)
+        return join_names([board.character_at(c).name for c in self.members])
 
 
 def _require(data: Mapping[str, Any], kind: str, *fields: str) -> None:
