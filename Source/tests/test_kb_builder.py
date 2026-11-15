@@ -7,6 +7,7 @@ build_kb chỉ nhận PublicState (không nhận PuzzleFull).
 """
 
 from itertools import product
+from pathlib import Path
 from typing import Iterator
 
 import pytest
@@ -14,10 +15,10 @@ import pytest
 from game.board import Board
 from game.cell import Cell
 from game.character import Character, Status
-from game.clue import Clue, ExactlyClue, FactClue
+from game.clue import Clue, ExactlyClue, FactClue, IfThenClue, ParityClue
 from game.public_state import PublicState, RevealedCard
-from game.puzzle_loader import PuzzleFull
-from game.region import Neighbors
+from game.puzzle_loader import PuzzleFull, load_puzzle
+from game.region import Neighbors, Row
 from game.semantics import count_criminals
 from logic.clue_encoder import encode_clues
 from logic.cnf import CNF
@@ -133,3 +134,48 @@ def test_build_kb_only_accepts_public_state(board: Board) -> None:
 
     # State ban đầu chỉ chứa thẻ mở sẵn, không chứa clue của 8 thẻ còn úp
     assert build_kb(full.initial_state()).clue_ids == ("A1",)
+
+# KB_t có biến phụ (clue mở rộng T10)
+def _satisfiable_with_aux(kb, main: dict[int, bool]) -> bool:
+    """KB_t thoả được khi biến chính cố định theo main, biến phụ chọn tuỳ ý"""
+    aux = kb.vmap.aux_vars()
+    for bits in product((False, True), repeat=len(aux)):
+        if _cnf_true(kb.cnf, {**main, **dict(zip(aux, bits))}):
+            return True
+    return False
+
+
+def test_kb_with_aux_clue(board: Board) -> None:
+    """PARITY trên 8 hàng xóm của B2 cấp 6 biến phụ; verdict vẫn là unit clause trên biến chính."""
+    b2 = Cell.parse("B2")
+    kb = build_kb(PublicState(board, [_card(board, "B2", ParityClue(_nb("B2"), "EVEN"))]))
+    assert kb.stats.aux_vars == 6
+    assert kb.num_vars == 9 + 6
+    assert all(kb.vmap.is_aux(v) for v in range(10, kb.cnf.max_var() + 1))
+    assert (kb.var(b2),) in kb.cnf.clauses
+    assert kb.clue_clauses + kb.verdict_units == len(kb.cnf) == kb.stats.clauses
+
+
+def test_build_kb_is_deterministic(board: Board) -> None:
+    """Dựng lại KB_t từ cùng một state cho đúng cùng mệnh đề và cùng cách đánh số biến phụ."""
+    state = PublicState(board, [
+        _card(board, "A1", ParityClue(Row(1), "ODD")),
+        _card(board, "B2", IfThenClue(Cell.parse("B2"), Status.CRIMINAL, ParityClue(Row(3), "ODD"))),
+    ])
+    first, second = build_kb(state), build_kb(state)
+    assert first.cnf.clauses == second.cnf.clauses
+    assert first.num_vars == second.num_vars == 11
+
+
+_PUZZLES = Path(__file__).resolve().parent.parent / "puzzles" / "3x3"
+
+
+@pytest.mark.parametrize("name", ["3x3_05", "3x3_06"])
+def test_true_solution_satisfies_kb_with_extensions(name: str) -> None:
+    """Lật hết thẻ của puzzle dùng clue mở rộng: đáp án thật vẫn thoả KB_t (tồn tại giá trị biến phụ)."""
+    puzzle = load_puzzle(_PUZZLES / f"{name}.json")
+    cards = [RevealedCard(c, puzzle.solution[c], puzzle.clues[c]) for c in puzzle.board.cells()]
+    kb = build_kb(PublicState(puzzle.board, cards))
+    assert kb.stats.aux_vars > 0
+    main = {kb.var(c): s is Status.CRIMINAL for c, s in puzzle.solution.items()}
+    assert _satisfiable_with_aux(kb, main)
