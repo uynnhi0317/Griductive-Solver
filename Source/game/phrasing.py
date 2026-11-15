@@ -50,6 +50,20 @@ def _owner(region: Neighbors, board: Board) -> str:
 def _names(region: ExplicitList, board: Board) -> list[str]:
     return [board.character_at(c).name for c in region.members]
 
+def _group_sentence(region: ExplicitList, board: Board, op: str, k: int, status: Status) -> str:
+    """Câu đếm cho nhóm nghề: 'Exactly 1 of the 3 Cops is a criminal', 'Both Doctors are innocent'"""
+    n = len(region.cells(board))
+    one, many = region.profession_name(board), region.profession_plural(board)
+    none = k == 0 and op in ("EXACTLY", "AT_MOST")
+    everyone = k == n and op != "AT_MOST"
+    if n == 1 and (none or everyone):
+        return f"The {one} is {status_phrase(status if everyone else status.opposite)}"
+    if none:
+        return f"None of the {many} {_predicate(status, 2)}"
+    if everyone:
+        return f"{'Both' if n == 2 else 'All'} {many} {_predicate(status, 2)}"
+    return f"{_QUANTIFIER[op].capitalize()} {k} of the {n} {many} {_predicate(status, k)}"
+
 
 def among(region: Region, board: Board) -> str:
     """Cụm chỉ phạm vi: 'in row 2', 'among Eve's neighbors', 'among Alice and Ivy'"""
@@ -70,6 +84,9 @@ def count_sentence(region: Region, board: Board, op: str, k: int, status: Status
         if none:
             return f"{owner} has no {word} neighbors"
         return f"{owner} has {quantifier} {k} {word} neighbor{'' if k == 1 else 's'}"
+
+    if isinstance(region, ExplicitList) and region.is_profession:
+        return _group_sentence(region, board, op, k, status)
 
     if isinstance(region, ExplicitList):
         names = _names(region, board)
@@ -96,6 +113,12 @@ def parity_sentence(region: Region, board: Board, odd: bool, status: Status = St
     amount = "an odd" if odd else "an even"
     if isinstance(region, Neighbors):
         return f"{_owner(region, board)} has {amount} number of {status_word(status)} neighbors"
+
+    if isinstance(region, ExplicitList) and region.is_profession:
+        if len(region.cells(board)) == 1:
+            return f"The {region.profession_name(board)} is {status_phrase(status if odd else status.opposite)}"
+        return f"{amount.capitalize()} number of the {region.profession_plural(board)} {_predicate(status, 2)}"
+    
     if isinstance(region, ExplicitList):
         names = _names(region, board)
         if len(names) == 1:
@@ -112,6 +135,12 @@ def one_of_k_sentence(name: str, region: Region, board: Board, k: int, status: S
         if k == 1:
             return f"{name} is {owner} only {word} neighbor"
         return f"{name} is one of {owner} {k} {word} neighbors"
+
+    if isinstance(region, ExplicitList) and region.is_profession:
+        if k == 1:
+            return f"{name} is the only {word} {region.profession_name(board)}"
+        return f"{name} is one of the {k} {word} {region.profession_plural(board)}"
+    
     if k == 1:
         return f"{name} is the only {word} {among(region, board)}"
     return f"{name} is one of the {k} {status_noun(status, k)} {among(region, board)}"

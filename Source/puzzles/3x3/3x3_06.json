@@ -1,0 +1,40 @@
+{
+  "id": "3x3_06",
+  "title": "Shift Change",
+  "description": "Profession groups: several characters share a job (3 Cops, 2 Doctors, 3 Guards) and some clues count over a whole profession.",
+  "size": 3,
+  "characters": {
+    "A1": {"name": "Alice", "profession": "Cop"},
+    "B1": {"name": "Bob", "profession": "Doctor"},
+    "C1": {"name": "Cara", "profession": "Cop"},
+    "A2": {"name": "Dan", "profession": "Guard"},
+    "B2": {"name": "Eve", "profession": "Cop"},
+    "C2": {"name": "Finn", "profession": "Doctor"},
+    "A3": {"name": "Gina", "profession": "Guard"},
+    "B3": {"name": "Hugo", "profession": "Chef"},
+    "C3": {"name": "Ivy", "profession": "Guard"}
+  },
+  "solution": {
+    "A1": "CRIMINAL",
+    "B1": "CRIMINAL",
+    "C1": "INNOCENT",
+    "A2": "CRIMINAL",
+    "B2": "INNOCENT",
+    "C2": "CRIMINAL",
+    "A3": "INNOCENT",
+    "B3": "INNOCENT",
+    "C3": "CRIMINAL"
+  },
+  "clues": {
+    "A1": {"type": "IF_THEN", "cell": "B2", "status": "CRIMINAL", "then": {"type": "PARITY", "status": "CRIMINAL", "parity": "ODD", "region": {"type": "NEIGHBORS", "cell": "C3"}}},
+    "B1": {"type": "AT_LEAST", "k": 1, "region": {"type": "CELLS", "profession": "Guard"}},
+    "C1": {"type": "IF_THEN", "cell": "A2", "status": "INNOCENT", "then": {"type": "AT_LEAST", "k": 2, "region": {"type": "CELLS", "profession": "Cop"}}},
+    "A2": {"type": "ONE_OF_K", "status": "INNOCENT", "cell": "B2", "k": 1, "region": {"type": "NEIGHBORS", "cell": "A1"}},
+    "B2": {"type": "NO_ADJACENT", "status": "INNOCENT", "region": {"type": "ROW", "number": 2}},
+    "C2": {"type": "ONE_OF_K", "status": "CRIMINAL", "cell": "C3", "k": 2, "region": {"type": "CELLS", "profession": "Guard"}},
+    "A3": {"type": "FACT", "cell": "B3", "status": "INNOCENT"},
+    "B3": {"type": "ONE_OF_K", "status": "INNOCENT", "cell": "C1", "k": 2, "region": {"type": "CELLS", "profession": "Cop"}},
+    "C3": {"type": "SAME", "cells": ["B1", "C2"]}
+  },
+  "initially_revealed": ["B3"]
+}
