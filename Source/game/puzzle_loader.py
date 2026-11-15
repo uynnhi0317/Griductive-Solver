@@ -25,6 +25,8 @@ dùng định dạng to_dict() của chính nó:
   {"type": "COLUMN", "letter": "<cột>"}
   {"type": "NEIGHBORS", "cell": "<ô>"}                  # các ô kề 8 hướng, không gồm chính ô đó
   {"type": "CELLS", "cells": ["<ô>", ...]}              # danh sách ô phân biệt, không rỗng
+  {"type": "CELLS", "profession": "<nghề>"}             # mọi nhân vật làm nghề đó (không phân biệt hoa thường)
+  {"type": "CELLS", "profession": "<nghề>", "plural": "<số nhiều>"}   # plural tuỳ chọn, chỉ để hiển thị
 
 Mọi ô được nhắc tới phải nằm trong board; vi phạm bất kỳ ràng buộc nào đều báo PuzzleFormatError.
 """

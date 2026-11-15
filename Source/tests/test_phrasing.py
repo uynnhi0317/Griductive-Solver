@@ -89,23 +89,23 @@ def test_region_describe(region, without_board, with_board):
     (ExactlyClue(ONE, 0), "Eliza is innocent"),
     # PARITY
     (ParityClue(Row(1), "ODD"), "There is an odd number of criminals in row 1"),
-    (ParityClue(Neighbors(C("B2")), "EVEN", INNO), "Eliza has an even number of innocent neighbors"),
+    (ParityClue(Neighbors(C("B2")), "EVEN", status=INNO), "Eliza has an even number of innocent neighbors"),
     (ParityClue(TRIO, "ODD"), "An odd number of Abel, Eliza and James are criminals"),
     (ParityClue(ONE, "ODD"), "Eliza is a criminal"),
-    (ParityClue(ONE, "EVEN", INNO), "Eliza is a criminal"),
+    (ParityClue(ONE, "EVEN", status=INNO), "Eliza is a criminal"),
     # CONNECTED
     (ConnectedClue(Column("A")), "All criminals in column A are connected"),
-    (ConnectedClue(Row(2), INNO), "All innocents in row 2 are connected"),
+    (ConnectedClue(Row(2), status=INNO), "All innocents in row 2 are connected"),
     # NO_ADJACENT
     (NoAdjacentClue(Row(1)), "No two criminals in row 1 are next to each other"),
-    (NoAdjacentClue(Neighbors(C("B2")), INNO), "No two innocents among Eliza's neighbors are next to each other"),
+    (NoAdjacentClue(Neighbors(C("B2")), status=INNO), "No two innocents among Eliza's neighbors are next to each other"),
     (NoAdjacentClue(TRIO), "No two criminals among Abel, Eliza and James are next to each other"),
     # ONE_OF_K
-    (OneOfKClue(C("B1"), Row(1), 1), "Bea is the only criminal in row 1"),
-    (OneOfKClue(C("B1"), Row(1), 2, INNO), "Bea is one of the 2 innocents in row 1"),
-    (OneOfKClue(C("B1"), Neighbors(C("B2")), 3), "Bea is one of Eliza's 3 criminal neighbors"),
-    (OneOfKClue(C("B2"), Neighbors(C("C3")), 1, INNO), "Eliza is James' only innocent neighbor"),
-    (OneOfKClue(C("A1"), TRIO, 2), "Abel is one of the 2 criminals among Abel, Eliza and James"),
+    (OneOfKClue(cell=C("B1"), region=Row(1), k=1), "Bea is the only criminal in row 1"),
+    (OneOfKClue(cell=C("B1"), region=Row(1), k=2, status=INNO), "Bea is one of the 2 innocents in row 1"),
+    (OneOfKClue(cell=C("B1"), region=Neighbors(C("B2")), k=3), "Bea is one of Eliza's 3 criminal neighbors"),
+    (OneOfKClue(cell=C("B2"), region=Neighbors(C("C3")), k=1, status=INNO), "Eliza is James' only innocent neighbor"),
+    (OneOfKClue(cell=C("A1"), region=TRIO, k=2), "Abel is one of the 2 criminals among Abel, Eliza and James"),
     # IF_THEN: vế sau viết thường chữ đầu, trừ khi bắt đầu bằng tên nhân vật
     (IfThenClue(C("A1"), CRIM, ExactlyClue(Row(3), 0)), "If Abel is a criminal, then there are no criminals in row 3"),
     (IfThenClue(C("A1"), INNO, ExactlyClue(PAIR, 1)), "If Abel is innocent, then exactly 1 of Abel and James is a criminal"),

@@ -71,26 +71,26 @@ EXT_CLUES = [
     ParityClue(Neighbors(C("A1")), "EVEN"),    # góc, 3 ô
     ParityClue(ExplicitList((C("A1"), C("C3"))), "ODD"),
     ParityClue(ExplicitList((C("B2"),)), "EVEN"),
-    ParityClue(Row(1), "ODD", INNO),
-    ParityClue(Neighbors(C("B2")), "EVEN", INNO),
-    ParityClue(ExplicitList((C("B2"),)), "ODD", INNO),
+    ParityClue(Row(1), "ODD", status=INNO),
+    ParityClue(Neighbors(C("B2")), "EVEN", status=INNO),
+    ParityClue(ExplicitList((C("B2"),)), "ODD", status=INNO),
     # CONNECTED
     ConnectedClue(Row(1)),
     ConnectedClue(Column("B")),
-    ConnectedClue(Row(2), INNO),
-    ConnectedClue(Column("C"), INNO),
+    ConnectedClue(Row(2), status=INNO),
+    ConnectedClue(Column("C"), status=INNO),
     # NO_ADJACENT
     NoAdjacentClue(Row(3)),
     NoAdjacentClue(Neighbors(C("B2"))),
     NoAdjacentClue(ExplicitList((C("A1"), C("B2"), C("C3")))),
-    NoAdjacentClue(Row(1), INNO),
-    NoAdjacentClue(Neighbors(C("B2")), INNO),
+    NoAdjacentClue(Row(1), status=INNO),
+    NoAdjacentClue(Neighbors(C("B2")), status=INNO),
     # ONE_OF_K
-    OneOfKClue(C("B1"), Row(1), 1),
-    OneOfKClue(C("B2"), Column("B"), 2),
-    OneOfKClue(C("A2"), Neighbors(C("B2")), 3),
-    OneOfKClue(C("A3"), Row(3), 2, INNO),
-    OneOfKClue(C("B2"), Neighbors(C("A1")), 1, INNO),
+    OneOfKClue(cell=C("B1"), region=Row(1), k=1),
+    OneOfKClue(cell=C("B2"), region=Column("B"), k=2),
+    OneOfKClue(cell=C("A2"), region=Neighbors(C("B2")), k=3),
+    OneOfKClue(cell=C("A3"), region=Row(3), k=2, status=INNO),
+    OneOfKClue(cell=C("B2"), region=Neighbors(C("A1")), k=1, status=INNO),
     # IF_THEN, vế sau là clue lõi lẫn clue mở rộng (kể cả clue có biến phụ và IF_THEN lồng)
     IfThenClue(C("A1"), CRIM, ExactlyClue(Row(3), 2)),
     IfThenClue(C("C3"), INNO, SameClue(C("A1"), C("B1"))),
@@ -98,8 +98,8 @@ EXT_CLUES = [
     IfThenClue(C("A2"), CRIM, ParityClue(Neighbors(C("B2")), "EVEN")),
     IfThenClue(C("C1"), INNO, ConnectedClue(Column("A"))),
     IfThenClue(C("B3"), CRIM, IfThenClue(C("A3"), CRIM, NoAdjacentClue(Row(2)))),
-    IfThenClue(C("C2"), CRIM, OneOfKClue(C("C2"), Column("C"), 2)),
-    IfThenClue(C("A1"), INNO, ParityClue(Column("B"), "ODD", INNO)),
+    IfThenClue(C("C2"), CRIM, OneOfKClue(cell=C("C2"), region=Column("C"), k=2)),
+    IfThenClue(C("A1"), INNO, ParityClue(Column("B"), "ODD", status=INNO)),
 ]
 
 
@@ -126,7 +126,7 @@ def test_dict_roundtrip(clue):
 @pytest.mark.parametrize("status", [CRIM, INNO])
 def test_parity_aux_and_size(n_region, expected_aux, expected_clauses, status):
     vmap = VariableMap(BOARD)
-    cnf = encode_clue(ParityClue(n_region, "ODD", status), vmap)
+    cnf = encode_clue(ParityClue(n_region, "ODD", status=status), vmap)
     assert vmap.num_aux == expected_aux
     assert len(cnf) == expected_clauses
     assert all(vmap.is_aux(v) for v in range(vmap.num_main + 1, cnf.max_var() + 1))
@@ -134,7 +134,7 @@ def test_parity_aux_and_size(n_region, expected_aux, expected_clauses, status):
 
 def test_core_clues_use_no_aux():
     vmap = VariableMap(BOARD)
-    for clue in (ConnectedClue(Row(1)), NoAdjacentClue(Row(1), INNO), OneOfKClue(C("A1"), Row(1), 2, INNO)):
+    for clue in (ConnectedClue(Row(1)), NoAdjacentClue(Row(1), status=INNO), OneOfKClue(cell=C("A1"), region=Row(1), k=2, status=INNO)):
         encode_clue(clue, vmap)
     assert vmap.num_aux == 0
 
@@ -147,7 +147,7 @@ def test_connected_and_no_adjacent_sizes():
 
 
 def test_referenced_cells():
-    assert OneOfKClue(C("B1"), Row(1), 1).referenced_cells(BOARD) == (C("A1"), C("B1"), C("C1"))
+    assert OneOfKClue(cell=C("B1"), region=Row(1), k=1).referenced_cells(BOARD) == (C("A1"), C("B1"), C("C1"))
     clue = IfThenClue(C("C3"), CRIM, ExactlyClue(Row(1), 1))
     assert clue.referenced_cells(BOARD) == tuple(sorted((C("A1"), C("B1"), C("C1"), C("C3"))))
 
@@ -156,12 +156,12 @@ def test_referenced_cells():
     lambda: ParityClue(Row(1), "odd"),
     lambda: ConnectedClue(Neighbors(C("B2"))),
     lambda: ConnectedClue(ExplicitList((C("A1"), C("B1")))),
-    lambda: OneOfKClue(C("A1"), Row(1), 0),
-    lambda: OneOfKClue(C("A1"), Row(1), True),
+    lambda: OneOfKClue(cell=C("A1"), region=Row(1), k=0),
+    lambda: OneOfKClue(cell=C("A1"), region=Row(1), k=True),
     lambda: IfThenClue(C("A1"), "CRIMINAL", FactClue(C("B1"), CRIM)),
     lambda: IfThenClue(C("A1"), CRIM, "not a clue"),
-    lambda: ParityClue(Row(1), "ODD", "INNOCENT"),
-    lambda: NoAdjacentClue(Row(1), None),
+    lambda: ParityClue(Row(1), "ODD", status="INNOCENT"),
+    lambda: NoAdjacentClue(Row(1), status=None),
 ])
 def test_invalid_construction(make):
     with pytest.raises(ValueError):
@@ -169,11 +169,11 @@ def test_invalid_construction(make):
 
 
 @pytest.mark.parametrize("clue", [
-    OneOfKClue(C("A1"), Row(2), 1),                                # ô không thuộc vùng
-    OneOfKClue(C("A1"), Row(1), 4),                                # k > |R|
-    ConnectedClue(Row(4)),                                         # hàng ngoài board
-    NoAdjacentClue(ExplicitList((C("A1"), C("C3")))),              # không có cặp kề
-    IfThenClue(C("A1"), CRIM, OneOfKClue(C("A1"), Row(2), 1)),     # vế sau sai
+    OneOfKClue(cell=C("A1"), region=Row(2), k=1),                                # ô không thuộc vùng
+    OneOfKClue(cell=C("A1"), region=Row(1), k=4),                                # k > |R|
+    ConnectedClue(Row(4)),                                                       # hàng ngoài board
+    NoAdjacentClue(ExplicitList((C("A1"), C("C3")))),                            # không có cặp kề
+    IfThenClue(C("A1"), CRIM, OneOfKClue(cell=C("A1"), region=Row(2), k=1)),     # vế sau sai
 ])
 def test_invalid_against_board(clue):
     with pytest.raises(ValueError):
