@@ -1,0 +1,40 @@
+{
+  "id": "3x3_05",
+  "title": "Odd Neighbors",
+  "description": "Extension showcase: one face-up card; the deduction chain uses all five extension clues (PARITY, CONNECTED, NO_ADJACENT, ONE_OF_K, IF_THEN) together with core clues.",
+  "size": 3,
+  "characters": {
+    "A1": {"name": "Alice", "profession": "Actor"},
+    "B1": {"name": "Bob", "profession": "Baker"},
+    "C1": {"name": "Cara", "profession": "Chef"},
+    "A2": {"name": "Dan", "profession": "Doctor"},
+    "B2": {"name": "Eve", "profession": "Engineer"},
+    "C2": {"name": "Finn", "profession": "Farmer"},
+    "A3": {"name": "Gina", "profession": "Guard"},
+    "B3": {"name": "Hugo", "profession": "Hunter"},
+    "C3": {"name": "Ivy", "profession": "Interpreter"}
+  },
+  "solution": {
+    "A1": "INNOCENT",
+    "B1": "CRIMINAL",
+    "C1": "INNOCENT",
+    "A2": "INNOCENT",
+    "B2": "CRIMINAL",
+    "C2": "CRIMINAL",
+    "A3": "CRIMINAL",
+    "B3": "INNOCENT",
+    "C3": "CRIMINAL"
+  },
+  "clues": {
+    "A1": {"type": "IF_THEN", "cell": "B3", "status": "CRIMINAL", "then": {"type": "NO_ADJACENT", "region": {"type": "ROW", "number": 3}}},
+    "B1": {"type": "ONE_OF_K", "cell": "C3", "k": 4, "region": {"type": "NEIGHBORS", "cell": "B3"}},
+    "C1": {"type": "DIFFERENT", "cells": ["A3", "B3"]},
+    "A2": {"type": "CONNECTED", "region": {"type": "COLUMN", "letter": "B"}},
+    "B2": {"type": "NO_ADJACENT", "region": {"type": "NEIGHBORS", "cell": "A3"}},
+    "C2": {"type": "AT_MOST", "k": 2, "region": {"type": "NEIGHBORS", "cell": "B1"}},
+    "A3": {"type": "PARITY", "parity": "EVEN", "region": {"type": "NEIGHBORS", "cell": "C3"}},
+    "B3": {"type": "EXACTLY", "k": 2, "region": {"type": "NEIGHBORS", "cell": "A1"}},
+    "C3": {"type": "FACT", "cell": "A3", "status": "CRIMINAL"}
+  },
+  "initially_revealed": ["B2"]
+}
