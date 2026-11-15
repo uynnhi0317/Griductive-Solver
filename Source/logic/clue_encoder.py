@@ -105,31 +105,31 @@ def _encode_at_most(clue: AtMostClue, vmap: VariableMap) -> CNF:
 # Mọi clue mở rộng làm việc trên literal "ô có trạng thái status" (+C_i nếu CRIMINAL, ¬C_i nếu INNOCENT),
 # nên cùng một công thức CNF dùng được cho cả hai trạng thái
 def _xor_definition(t: int, a: int, b: int) -> list[tuple[int, ...]]:
-    """Tseitin cho t <-> (a XOR b): 4 mệnh đề"""
+    """Tseitin cho t <-> (a XOR b)"""
     return [(-t, a, b), (-t, -a, -b), (t, -a, b), (t, a, -b)]
 
 
 @register_encoder(ParityClue)
 def _encode_parity(clue: ParityClue, vmap: VariableMap) -> CNF:
     """
-    Chuỗi XOR Tseitin, dùng biến phụ:
-        p_1 = l_1,  p_i = p_{i-1} XOR l_i  (p_i là biến phụ, i = 2..n-1)
+    Chuỗi XOR Tseitin, dùng biến phụ: p_1 = l_1,  p_i = p_{i-1} XOR l_i
     Bước cuối không cần biến phụ: ép trực tiếp p_{n-1} XOR l_n = (parity == ODD)
-    -> n-2 biến phụ, 4(n-2) + 2 mệnh đề (n >= 2)
     """
     lits = _region_literals(clue, vmap, clue.status)
+
     want_odd = clue.parity == "ODD"
     if not lits:
-        return CNF([[]]) if want_odd else CNF()     # validate đã chặn ODD trên vùng rỗng
+        return CNF([[]]) if want_odd else CNF()
     if len(lits) == 1:
         return CNF([[lits[0] if want_odd else -lits[0]]])
 
+    # Xor Tseitin
     cnf = CNF()
     acc = lits[0]
     for i, lit in enumerate(lits[1:-1], start=2):
-        t = vmap.new_aux(f"{clue.kind}:{clue.region.describe()}:p{i}")
-        cnf.add_clauses(_xor_definition(t, acc, lit))
-        acc = t
+        p = vmap.new_aux(f"{clue.kind}:{clue.region.describe()}:p{i}")
+        cnf.add_clauses(_xor_definition(p, acc, lit))
+        acc = p
 
     # acc XOR last == want_odd: ODD <-> acc khác last, EVEN <-> acc bằng last
     last = lits[-1] if want_odd else -lits[-1]
@@ -139,8 +139,8 @@ def _encode_parity(clue: ParityClue, vmap: VariableMap) -> CNF:
 
 @register_encoder(ConnectedClue)
 def _encode_connected(clue: ConnectedClue, vmap: VariableMap) -> CNF:
-    # Cấm mẫu S ... (không S) ... S trên đường: với mọi i < j < k: (¬l_i ∨ l_j ∨ ¬l_k)
-    lits = _region_literals(clue, vmap, clue.status)   # Row/Column trả ô theo đúng thứ tự trên đường
+    # Cấm không cho ô có status còn lại chen vào giữa: với mọi i < j < k: (¬l_i ∨ l_j ∨ ¬l_k)
+    lits = _region_literals(clue, vmap, clue.status)
     return CNF([-a, b, -c] for a, b, c in combinations(lits, 3))
 
 
@@ -153,7 +153,7 @@ def _encode_no_adjacent(clue: NoAdjacentClue, vmap: VariableMap) -> CNF:
 
 @register_encoder(OneOfKClue)
 def _encode_one_of_k(clue: OneOfKClue, vmap: VariableMap) -> CNF:
-    # l_cell ∧ EXACTLY(k) trên các literal "có trạng thái status" của vùng
+    # Người đó mang trạng thái status và k người trong vùng đó có trạng thái là status: l_cell ∧ EXACTLY(k)
     cnf = CNF([[vmap.status_literal(clue.cell, clue.status)]])
     cnf.add_clauses(exactly(_region_literals(clue, vmap, clue.status), clue.k))
     return cnf
@@ -161,13 +161,9 @@ def _encode_one_of_k(clue: OneOfKClue, vmap: VariableMap) -> CNF:
 
 @register_encoder(IfThenClue)
 def _encode_if_then(clue: IfThenClue, vmap: VariableMap) -> CNF:
-    """
-    g -> φ  ==  AND_{c in CNF(φ)} (¬g ∨ c)
-    Vẫn đúng khi CNF(φ) có biến phụ (vd. PARITY): khi g sai, biến phụ chỉ xuất hiện
-    trong các mệnh đề đã thỏa nên tự do -> tương đương thỏa mãn trên biến chính
-    """
+    # Mệnh đề if-then tương đương ¬g ∨ c
     guard = vmap.status_literal(clue.cell, clue.status)
-    inner = _find_encoder(clue.then_clue)(clue.then_clue, vmap)  # then_clue đã được validate cùng clue cha
+    inner = _find_encoder(clue.then_clue)(clue.then_clue, vmap)
     return CNF((-guard, *c) for c in inner)
 
 # API công khai

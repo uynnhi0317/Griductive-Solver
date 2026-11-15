@@ -172,7 +172,6 @@ def _eval_one_of_k(clue: OneOfKClue, board: Board, assignment: Assignment) -> bo
 
 @register_evaluator(IfThenClue)
 def _eval_if_then(clue: IfThenClue, board: Board, assignment: Assignment) -> bool:
-    # Kéo theo: vế trước sai thì clue đúng; vế trước đúng thì vế sau phải đúng
     if assignment[clue.cell] is not clue.status:
         return True
     return evaluate_clue_unchecked(clue.then_clue, board, assignment)
