@@ -1,9 +1,10 @@
 """
+Test clue encoder: đối chiếu CNF với semantic evaluator.
+
 Với mỗi clue, duyệt mọi assignment của các biến chính và kiểm tra:
     CNF(clue) thoả được dưới assignment đó  <=>  evaluate_clue(clue) là True
 CNF được tự đánh giá bằng vòng lặp thuần, không dùng DPLL nên test độc lập với solver.
-Nếu encoder có biến phụ, CNF được coi là thoả khi tồn tại
-một cách gán biến phụ làm thoả mọi mệnh đề.
+Nếu encoder có biến phụ, CNF được coi là thoả khi tồn tại một cách gán biến phụ làm thoả mọi mệnh đề.
 """
 
 import random
@@ -12,10 +13,6 @@ from typing import Iterable, Iterator
 
 import pytest
 
-from game.public_state import PublicState, RevealedCard
-from game.puzzle_loader import PuzzleFull
-from game.semantics import count_criminals
-from logic.kb_builder import build_kb
 from game.board import Board
 from game.cell import Cell
 from game.character import Character, Status
@@ -77,7 +74,7 @@ def _cnf_true(cnf: CNF, model: dict[int, bool]) -> bool:
 
 def _satisfiable_under(cnf: CNF, vmap: VariableMap, bits: tuple[bool, ...]) -> bool:
     """CNF thoả khi biến chính nhận `bits` (row-major), biến phụ được chọn tuỳ ý."""
-    model = {i + 1: b for i, b in enumerate(bits)}
+    model = {vmap.var(c): b for c, b in zip(vmap.board.cells(), bits)}
     aux = vmap.aux_vars()
     for aux_bits in product((False, True), repeat=len(aux)):
         model.update(zip(aux, aux_bits))
@@ -121,6 +118,7 @@ REGIONS: dict[str, Region] = {
     "neighbors_edge": _nb("B1"),    # 5 ô
     "neighbors_center": _nb("B2"),  # 8 ô
     "explicit": _explicit("A1", "B2", "C3", "A3"),
+    "explicit_single": _explicit("B2"),  # 1 ô
 }
 
 COUNT_CLUES = [ExactlyClue, AtLeastClue, AtMostClue]
@@ -267,86 +265,45 @@ def test_invalid_clue_in_batch_rejected(board: Board) -> None:
         encode_clues(clues, VariableMap(board))
 
 
-# KB_t: unit clause và thông tin ẩn
-_CRIMINALS = {"A1", "B2", "C3"}  # đáp án giả định cho các test KB_t
+# Số mệnh đề của vùng một ô
+@pytest.mark.parametrize("clue_cls,k,sign", [
+    (ExactlyClue, 0, -1), (ExactlyClue, 1, +1),
+    (AtLeastClue, 0, 0), (AtLeastClue, 1, +1),
+    (AtMostClue, 0, -1), (AtMostClue, 1, 0),   # sign 0: không sinh mệnh đề nào
+])
+def test_single_cell_region_clauses(board: Board, clue_cls: type, k: int, sign: int) -> None:
+    v = board.index_of(Cell.parse("B2"))
+    cnf = encode_clue(clue_cls(_explicit("B2"), k), VariableMap(board))
+    expected = ((sign * v,),) if sign else ()
+    assert cnf.clauses == expected
 
 
-def _solution(board: Board) -> dict[Cell, Status]:
-    return {c: (Status.CRIMINAL if c.label in _CRIMINALS else Status.INNOCENT) for c in board.cells()}
+def test_single_cell_exactly_matches_fact(board: Board) -> None:
+    """EXACTLY(1, {c}) cùng dạng với FACT Criminal, EXACTLY(0, {c}) cùng dạng với FACT Innocent."""
+    c = Cell.parse("B2")
+    for k, status in ((1, Status.CRIMINAL), (0, Status.INNOCENT)):
+        region_cnf = encode_clue(ExactlyClue(_explicit("B2"), k), VariableMap(board))
+        fact_cnf = encode_clue(FactClue(c, status), VariableMap(board))
+        assert region_cnf.clauses == fact_cnf.clauses
 
 
-def _card(board: Board, label: str, clue: Clue) -> RevealedCard:
-    cell = Cell.parse(label)
-    return RevealedCard(cell, _solution(board)[cell], clue)
+
+# Số mệnh đề của SAME và DIFFERENT
+PAIRS = [("A1", "C3"), ("B1", "B2"), ("A1", "B2"), ("C1", "A3"), ("B2", "A1")]
 
 
-def test_kb_empty_state(board: Board) -> None:
-    kb = build_kb(PublicState.empty(board))
-    assert len(kb.cnf) == 0
-    assert (kb.clue_ids, kb.clue_clauses, kb.verdict_units) == ((), 0, 0)
-    assert kb.num_vars == 9
-    assert (kb.stats.main_vars, kb.stats.aux_vars) == (9, 0)
-    assert not kb.is_trivially_unsat()
-
-
-def test_kb_contains_exactly_revealed_clues_and_verdicts(board: Board) -> None:
-    clue_a1 = ExactlyClue(_nb("A1"), 1)  # A1 là Criminal, C1 là Innocent
-    clue_c1 = ExactlyClue(_nb("C1"), 1)
-    kb = build_kb(PublicState(board, [_card(board, "A1", clue_a1), _card(board, "C1", clue_c1)]))
-    a1, c1 = Cell.parse("A1"), Cell.parse("C1")
-
-    expected = encode_clues([clue_a1, clue_c1], VariableMap(board))
-    expected.add_clauses([[kb.var(a1)], [-kb.var(c1)]])
-    assert set(kb.cnf.clauses) == set(expected.clauses)
-    assert (kb.var(a1),) in kb.cnf.clauses      # verdict CRIMINAL: literal dương
-    assert (-kb.var(c1),) in kb.cnf.clauses     # verdict INNOCENT: literal âm
-    assert kb.clue_ids == ("A1", "C1")
-    assert kb.verdict_units == 2
-    assert kb.clue_clauses + kb.verdict_units == len(kb.cnf) == kb.stats.clauses
-
-
-def test_kb_is_satisfied_by_true_solution(board: Board) -> None:
-    cards = [
-        _card(board, "A1", ExactlyClue(_nb("A1"), 1)),
-        _card(board, "C1", ExactlyClue(_nb("C1"), 1)),
-        _card(board, "B2", ExactlyClue(_nb("B2"), 2)),
-    ]
-    kb = build_kb(PublicState(board, cards))
-    model = {board.index_of(c): s is Status.CRIMINAL for c, s in _solution(board).items()}
-    assert _cnf_true(kb.cnf, model)
-
-
-def test_kb_does_not_leak_hidden_status(board: Board) -> None:
-    """Chỉ lộ thẻ A1: các ô ngoài vùng clue (kể cả C3 là Criminal thật) không bị KB ép buộc."""
-    kb = build_kb(PublicState(board, [_card(board, "A1", ExactlyClue(_nb("A1"), 1))]))
-    models = [bits for bits in _all_bits(board)
-              if _cnf_true(kb.cnf, {i + 1: b for i, b in enumerate(bits)})]
-    for label in ("C1", "C2", "A3", "B3", "C3"):
-        idx = board.index_of(Cell.parse(label)) - 1
-        assert {m[idx] for m in models} == {False, True}, label
-
-
-def test_kb_counts_only_added_verdict_units(board: Board) -> None:
-    """Clue FACT trùng đúng unit clause của verdict thì verdict không được đếm thêm."""
-    c1 = Cell.parse("C1")
-    card = RevealedCard(c1, Status.INNOCENT, FactClue(c1, Status.INNOCENT))
-    kb = build_kb(PublicState(board, [card]))
-    assert kb.cnf.clauses == ((-kb.var(c1),),)
-    assert (kb.clue_clauses, kb.verdict_units) == (1, 0)
-
-
-def test_build_kb_only_accepts_public_state(board: Board) -> None:
-    sol = _solution(board)
-    clues = {
-        c: ExactlyClue(Neighbors(c), count_criminals(Neighbors(c).cells(board), sol))
-        for c in board.cells()
-    }
-    full = PuzzleFull("t", board, sol, clues, (Cell.parse("A1"),))
-
-    with pytest.raises(TypeError):
-        build_kb(full)
-    with pytest.raises(TypeError):
-        build_kb(None)  # type: ignore[arg-type]
-
-    # State ban đầu chỉ chứa thẻ mở sẵn, không chứa clue của 8 thẻ còn úp
-    assert build_kb(full.initial_state()).clue_ids == ("A1",)
+@pytest.mark.parametrize("pair", PAIRS)
+@pytest.mark.parametrize("clue_cls,make_expected", [
+    (SameClue, lambda a, b: {frozenset({-a, b}), frozenset({a, -b})}),
+    (DifferentClue, lambda a, b: {frozenset({a, b}), frozenset({-a, -b})}),
+])
+def test_pair_clue_has_exactly_two_clauses(
+    board: Board, clue_cls: type, make_expected, pair: tuple[str, str]
+) -> None:
+    a, b = Cell.parse(pair[0]), Cell.parse(pair[1])
+    vmap = VariableMap(board)
+    cnf = encode_clue(clue_cls(a, b), vmap)
+    assert len(cnf) == 2
+    assert {frozenset(c) for c in cnf} == make_expected(vmap.var(a), vmap.var(b))
+    assert (cnf.tautologies_skipped, cnf.duplicates_skipped) == (0, 0)
+    assert vmap.num_aux == 0
