@@ -1,6 +1,8 @@
 import pygame
+from typing import Mapping
 from game.public_state import PublicState
 from game.cell import Cell
+from .highlight import Role
 from .character_card import CharacterCard, CardModel
 from .theme import get_font, PALETTE
 
@@ -60,6 +62,11 @@ class BoardView:
     def refresh(self, state: PublicState) -> None:
         for cell, card in self.cards.items():
             card.sync(self._model_for(state, cell))
+
+    def set_highlights(self, roles: Mapping[Cell, Role]) -> None:
+        """Tô các ô theo vai trò; ô không có trong roles bị bỏ highlight"""
+        for cell, card in self.cards.items():
+            card.role = roles.get(cell)
 
     def update(self, dt: float) -> None:
         for card in self.cards.values():
