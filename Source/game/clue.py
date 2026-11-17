@@ -9,6 +9,7 @@ from .region import Column, Region, Row, region_from_dict
 from .phrasing import (
     among,
     count_sentence,
+    inline,
     one_of_k_sentence,
     parity_sentence,
     status_noun,
@@ -87,8 +88,8 @@ def _require_fields(kind: str, data: Mapping[str, Any], *fields: str) -> None:
 def _status_from(kind: str, raw: Any) -> Status:
     """Đọc trạng thái từ chuỗi 'CRIMINAL' / 'INNOCENT'"""
     try:
-        return Status[raw]
-    except (KeyError, TypeError):
+        return Status(raw)
+    except (ValueError, TypeError):
         raise ValueError(f"[{kind}]: Trạng thái không hợp lệ: {raw!r}") from None
 
 
@@ -289,7 +290,8 @@ class ParityClue(_RegionStatusClue):
             raise ValueError(f"[{self.kind}]: parity phải là ODD hoặc EVEN, nhận được {self.parity!r}")
 
     def validate(self, board: Board) -> None:
-        if self.parity == "ODD" and not self.region.cells(board):
+        cells = self.region.cells(board)
+        if self.parity == "ODD" and not cells:
             raise ValueError(f"[{self.kind}]: Vùng rỗng không thể có số lẻ người")
 
     def to_dict(self) -> dict[str, Any]:
@@ -318,7 +320,9 @@ class ConnectedClue(_RegionStatusClue):
             raise ValueError(f"[{self.kind}]: Chỉ áp dụng cho ROW hoặc COLUMN, nhận được {self.region!r}")
 
     def validate(self, board: Board) -> None:
-        self.region.cells(board)
+        cells = self.region.cells(board)
+        if len(cells) < 3:
+            raise ValueError(f"[{self.kind}]: {self.region.describe()} chỉ có {len(cells)} ô, cần ít nhất 3 ô để clue có ý nghĩa")
 
     def to_dict(self) -> dict[str, Any]:
         return self._to_dict()
@@ -369,7 +373,7 @@ class OneOfKClue(_RegionStatusClue):
 
     def __post_init__(self) -> None:
         self._check_region_status()
-        if not isinstance(self.k, int) or isinstance(self.k, bool):
+        if not isinstance(self.k, int):
             raise ValueError(f"[{self.kind}]: k phải là số nguyên, nhận được {self.k!r}")
         if self.k < 1:
             raise ValueError(f"[{self.kind}]: k phải >= 1, nhận được {self.k}")
@@ -424,12 +428,8 @@ class IfThenClue(Clue):
         return {"type": self.kind, "cell": self.cell.label, "status": self.status.value, "then": self.then_clue.to_dict()}
 
     def describe(self, board: Board) -> str:
-        then_text = self.then_clue.describe(board)
-        try:
-            board.cell_of(then_text.split(" ", 1)[0])
-        except KeyError:
-            then_text = then_text[:1].lower() + then_text[1:]
-        return f"If {_name(board, self.cell)} is {status_phrase(self.status)}, then {then_text}"
+        then_text = inline(self.then_clue.describe(board))
+        return f"If {_name(board, self.cell)} is {status_phrase(self.status)}, {then_text}"
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "IfThenClue":

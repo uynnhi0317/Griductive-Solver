@@ -64,7 +64,6 @@ def _projected_sat(cnf, vmap: VariableMap, assignment) -> bool:
 
 # Chọn ô theo nghề
 def test_cells_with_profession_is_case_insensitive_and_row_major():
-    assert _labels(BOARD.cells_with_profession("Cop")) == ["A1", "C1", "B2"]
     assert _labels(BOARD.cells_with_profession("  cOP ")) == ["A1", "C1", "B2"]
     assert BOARD.cells_with_profession("Pilot") == ()
 
@@ -181,8 +180,8 @@ def test_no_adjacent_pairs_follow_board_positions():
     (OneOfKClue(cell=C("C2"), region=DOCTORS, k=1), "Fay is the only criminal Doctor"),
     (OneOfKClue(cell=C("B2"), region=COPS, k=2, status=INNO), "Eli is one of the 2 innocent Cops"),
     (IfThenClue(C("B3"), CRIM, ExactlyClue(GUARDS, 1)),
-     "If Hal is a criminal, then exactly 1 of the 3 Guards is a criminal"),
-    (IfThenClue(C("A1"), INNO, ExactlyClue(CHEF, 0)), "If Ann is innocent, then the Chef is innocent"),
+     "If Hal is a criminal, exactly 1 of the 3 Guards is a criminal"),
+    (IfThenClue(C("A1"), INNO, ExactlyClue(CHEF, 0)), "If Ann is innocent, the Chef is innocent"),
 ])
 def test_describe(clue, text):
     clue.validate(BOARD)

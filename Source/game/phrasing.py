@@ -9,6 +9,21 @@ from .region import ExplicitList, Neighbors, Region, join_names, possessive
 
 _QUANTIFIER = {"EXACTLY": "exactly", "AT_LEAST": "at least", "AT_MOST": "at most"}
 
+# Các từ mở đầu câu do mẫu câu sinh ra (không phải tên nhân vật)
+SENTENCE_OPENERS = frozenset({
+    "There", "Exactly", "At", "None", "Neither", "Both", "All", "An", "The", "No", "If",
+})
+
+
+def inline(sentence: str) -> str:
+    """
+    Đưa một câu vào giữa câu khác: viết thường chữ đầu nếu câu mở đầu 
+    bằng từ của mẫu câu, giữ nguyên nếu mở đầu bằng tên nhân vật
+    """
+    if sentence.split(" ", 1)[0] in SENTENCE_OPENERS:
+        return sentence[:1].lower() + sentence[1:]
+    return sentence
+
 
 # Từ ngữ theo trạng thái
 def status_word(status: Status) -> str:

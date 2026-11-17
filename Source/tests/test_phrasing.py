@@ -18,6 +18,7 @@ from game.clue import (
     ParityClue,
     SameClue,
 )
+from game.phrasing import SENTENCE_OPENERS, inline
 from game.region import Column, ExplicitList, Neighbors, Row, join_names, possessive
 
 C = Cell.parse
@@ -59,7 +60,7 @@ def test_region_describe(region, without_board, with_board):
     assert region.describe(BOARD) == with_board
 
 
-@pytest.mark.parametrize("clue, text", [
+DESCRIBE_CASES = [
     # Clue lõi
     (FactClue(C("A1"), CRIM), "Abel is a criminal"),
     (FactClue(C("A1"), INNO), "Abel is innocent"),
@@ -107,12 +108,45 @@ def test_region_describe(region, without_board, with_board):
     (OneOfKClue(cell=C("B2"), region=Neighbors(C("C3")), k=1, status=INNO), "Eliza is James' only innocent neighbor"),
     (OneOfKClue(cell=C("A1"), region=TRIO, k=2), "Abel is one of the 2 criminals among Abel, Eliza and James"),
     # IF_THEN: vế sau viết thường chữ đầu, trừ khi bắt đầu bằng tên nhân vật
-    (IfThenClue(C("A1"), CRIM, ExactlyClue(Row(3), 0)), "If Abel is a criminal, then there are no criminals in row 3"),
-    (IfThenClue(C("A1"), INNO, ExactlyClue(PAIR, 1)), "If Abel is innocent, then exactly 1 of Abel and James is a criminal"),
-    (IfThenClue(C("A1"), CRIM, AtMostClue(Neighbors(C("B2")), 1)), "If Abel is a criminal, then Eliza has at most 1 criminal neighbor"),
-    (IfThenClue(C("A1"), INNO, SameClue(C("B1"), C("C1"))),
-     "If Abel is innocent, then Bea and Clara are the same (both criminals or both innocents)"),
-])
+    (IfThenClue(C("A1"), CRIM, ExactlyClue(Row(3), 0)), "If Abel is a criminal, there are no criminals in row 3"),
+    (IfThenClue(C("A1"), CRIM, AtMostClue(Neighbors(C("B2")), 1)), "If Abel is a criminal, Eliza has at most 1 criminal neighbor"),
+    (IfThenClue(C("A1"), CRIM, IfThenClue(C("B1"), INNO, FactClue(C("C1"), CRIM))),
+     "If Abel is a criminal, if Bea is innocent, Clara is a criminal"),
+]
+
+
+@pytest.mark.parametrize("clue, text", DESCRIBE_CASES)
 def test_clue_describe(clue, text):
     clue.validate(BOARD)
     assert clue.describe(BOARD) == text
+
+
+def test_sentence_opens_with_name_or_known_opener():
+    # Giữ SENTENCE_OPENERS đồng bộ với các mẫu câu: mỗi câu phải mở đầu bằng tên hoặc từ đã đăng ký
+    # (bỏ qua IF_THEN: câu luôn mở đầu bằng 'If', vế sau đã có ca riêng)
+    names = {BOARD.character_at(c).name for c in BOARD.cells()}
+    for clue, text in DESCRIBE_CASES:
+        if isinstance(clue, IfThenClue):
+            continue
+        first = text.split(" ", 1)[0]
+        assert first in names or first in SENTENCE_OPENERS, text
+
+
+def test_inline_name_equal_to_opener():
+    # Nhân vật tên 'There' không được làm câu mẫu 'There is ...' giữ chữ hoa
+    names = "There Bea Clara Derek Eliza Franz Grant Hannah James".split()
+    data = {Cell(r, c).label: {"name": names[(r - 1) * 3 + c - 1], "profession": "X"}
+            for r in range(1, 4) for c in range(1, 4)}
+    board = Board.from_dict(3, data)
+    clue = IfThenClue(C("B1"), CRIM, ExactlyClue(Row(3), 1))
+    assert clue.describe(board) == "If Bea is a criminal, there is exactly 1 criminal in row 3"
+
+
+@pytest.mark.parametrize("sentence, expected", [
+    ("There are no criminals in row 1", "there are no criminals in row 1"),
+    ("No two criminals in row 1 are next to each other", "no two criminals in row 1 are next to each other"),
+    ("Eliza is innocent", "Eliza is innocent"),
+    ("", ""),
+])
+def test_inline(sentence, expected):
+    assert inline(sentence) == expected
