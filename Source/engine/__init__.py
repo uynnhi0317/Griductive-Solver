@@ -1,2 +1,1 @@
-"""Game engine module managing game loop, deduction steps, and progressive clue reveals."""
-
+"""Game Engine: giữ puzzle đầy đủ, phán xử verdict bằng entailment trên PublicState, lật thẻ và restart."""
