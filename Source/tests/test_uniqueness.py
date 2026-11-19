@@ -1,8 +1,12 @@
-from agent.uniqueness import UniquenessStatus, check_clues_uniqueness
+from pathlib import Path
+import pytest
+
+from agent.uniqueness import UniquenessStatus, check_clues_uniqueness, check_puzzle_uniqueness
 from game.board import Board
 from game.cell import Cell
 from game.character import Status
 from game.clue import DifferentClue, FactClue, SameClue
+from game.puzzle_loader import load_puzzle
 import agent.uniqueness as U
 from solver.dpll import SolverTimeout
 from solver.stats import SolverStats
@@ -117,3 +121,15 @@ def test_known_contradicting_clue_is_no_solution():
     a = board.cells()[0]
     r = check_clues_uniqueness(board, [FactClue(a, Status.CRIMINAL)], known={a: Status.INNOCENT})
     assert r.status is UniquenessStatus.NO_SOLUTION
+
+
+PUZZLE_DIR = Path(__file__).resolve().parents[1] / "puzzles"
+PUZZLE_FILES = sorted(PUZZLE_DIR.rglob("*.json"))
+
+
+@pytest.mark.skipif(not PUZZLE_FILES, reason="không tìm thấy puzzle nào")
+@pytest.mark.parametrize("path", PUZZLE_FILES, ids=lambda p: p.name)
+def test_bundled_puzzles_are_unique(path):
+    puzzle = load_puzzle(path)
+    r = check_puzzle_uniqueness(puzzle)
+    assert r.is_unique, f"{path.name}: {r.status.value}"

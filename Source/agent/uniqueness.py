@@ -65,8 +65,7 @@ def check_clues_uniqueness(
     vmap = VariableMap(board)
     cnf = encode_clues(clues, vmap)
     for cell, status in (known or {}).items():
-        v = vmap.var(cell)            # dùng đúng tên hàm ánh xạ ô -> biến C_i
-        cnf.add_clause([v if status is Status.CRIMINAL else -v])
+        cnf.add_clause([vmap.status_literal(cell, status)])
     encoding = compute_stats(cnf, vmap)
     n = vmap.max_var
 
@@ -106,5 +105,5 @@ def check_clues_uniqueness(
 def check_puzzle_uniqueness(puzzle: PuzzleFull, time_limit: float | None = None) -> UniquenessResult:
     """Kiểm tra puzzle đầy đủ: mọi clue của mọi thẻ + status của thẻ mở sẵn.
     Status của thẻ úp (đáp án ẩn) không được đưa vào CNF"""
-    known = {c: puzzle.solution[c] for c in puzzle.initially_open}
+    known = puzzle.initial_state().verdicts()
     return check_clues_uniqueness(puzzle.board, puzzle.clues.values(), known=known, time_limit=time_limit)
