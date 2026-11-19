@@ -2,8 +2,8 @@
 Kiểm tra tính duy nhất nghiệm của bộ clue đầy đủ (tách riêng khỏi vòng suy diễn của agent)
 
 Cách làm:
-+ Mã hóa toàn bộ clue của puzzle (kể cả thẻ chưa lật) thành CNF, không thêm unit clause verdict
-  nên không dùng đáp án ẩn
++ Mã hóa toàn bộ clue của puzzle (kể cả thẻ chưa lật) thành CNF, cộng unit clause cho status của
+  các thẻ mở sẵn (public knowledge); status của thẻ úp không được dùng
 + Giải lần 1: UNSAT -> NO_SOLUTION; SAT -> lấy một mô hình
 + Thêm mệnh đề chặn mô hình đó (chỉ trên biến chính C_i, biến phụ không tính là một nghiệm khác)
   rồi giải lần 2: UNSAT -> UNIQUE; SAT -> MULTIPLE kèm nghiệm thứ hai làm phản chứng
@@ -12,7 +12,7 @@ Cách làm:
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterable
+from typing import Iterable, Mapping
 
 from game.board import Board
 from game.cell import Cell
@@ -54,10 +54,19 @@ class UniquenessResult:
         return tuple(c for c in self.solution if self.solution[c] is not self.second_solution[c])
 
 
-def check_clues_uniqueness(board: Board, clues: Iterable[Clue], time_limit: float | None = None) -> UniquenessResult:
-    """Kiểm tra bộ clue có đúng một nghiệm trên board hay không"""
+def check_clues_uniqueness(
+    board: Board,
+    clues: Iterable[Clue],
+    known: Mapping[Cell, Status] | None = None,
+    time_limit: float | None = None,
+) -> UniquenessResult:
+    """Kiểm tra bộ clue có đúng một nghiệm trên board hay không.
+    known: status của các thẻ mở sẵn (public knowledge), được thêm vào CNF dưới dạng unit clause"""
     vmap = VariableMap(board)
     cnf = encode_clues(clues, vmap)
+    for cell, status in (known or {}).items():
+        v = vmap.var(cell)            # dùng đúng tên hàm ánh xạ ô -> biến C_i
+        cnf.add_clause([v if status is Status.CRIMINAL else -v])
     encoding = compute_stats(cnf, vmap)
     n = vmap.max_var
 
@@ -95,5 +104,7 @@ def check_clues_uniqueness(board: Board, clues: Iterable[Clue], time_limit: floa
 
 
 def check_puzzle_uniqueness(puzzle: PuzzleFull, time_limit: float | None = None) -> UniquenessResult:
-    """Kiểm tra puzzle đầy đủ (mọi clue của mọi thẻ); đáp án ẩn không được đưa vào CNF"""
-    return check_clues_uniqueness(puzzle.board, puzzle.clues.values(), time_limit)
+    """Kiểm tra puzzle đầy đủ: mọi clue của mọi thẻ + status của thẻ mở sẵn.
+    Status của thẻ úp (đáp án ẩn) không được đưa vào CNF"""
+    known = {c: puzzle.solution[c] for c in puzzle.initially_open}
+    return check_clues_uniqueness(puzzle.board, puzzle.clues.values(), known=known, time_limit=time_limit)
