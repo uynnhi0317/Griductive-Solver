@@ -4,7 +4,10 @@ Dispatch theo loại clue.
 Encoder không đọc đáp án ẩn: chỉ dùng clue, board và VariableMap.
 """
 
+from itertools import combinations
 from typing import Callable, Iterable
+
+from game.character import Status
 
 from game.clue import (
     AtLeastClue,
@@ -14,6 +17,12 @@ from game.clue import (
     ExactlyClue,
     FactClue,
     SameClue,
+    ConnectedClue,
+    IfThenClue,
+    NoAdjacentClue,
+    OneOfKClue,
+    ParityClue,
+    adjacent_pairs,
 )
 
 from .cardinality import at_least, at_most, exactly
@@ -72,9 +81,9 @@ def _encode_different(clue: DifferentClue, vmap: VariableMap) -> CNF:
     return CNF([[a, b], [-a, -b]])
 
 
-def _region_literals(clue, vmap: VariableMap) -> list[int]:
-    cells = clue.region.cells(vmap.board)
-    return [vmap.literal(cell) for cell in cells]
+def _region_literals(clue, vmap: VariableMap, status: Status = Status.CRIMINAL) -> list[int]:
+    """Literal ô có trạng thái status cho từng ô trong vùng của clue, theo thứ tự của vùng"""
+    return [vmap.status_literal(cell, status) for cell in clue.region.cells(vmap.board)]
 
 
 @register_encoder(ExactlyClue)
@@ -91,6 +100,71 @@ def _encode_at_least(clue: AtLeastClue, vmap: VariableMap) -> CNF:
 def _encode_at_most(clue: AtMostClue, vmap: VariableMap) -> CNF:
     return CNF(at_most(_region_literals(clue, vmap), clue.k))
 
+
+# Extension encoders (T10)
+# Mọi clue mở rộng làm việc trên literal "ô có trạng thái status" (+C_i nếu CRIMINAL, ¬C_i nếu INNOCENT),
+# nên cùng một công thức CNF dùng được cho cả hai trạng thái
+def _xor_definition(t: int, a: int, b: int) -> list[tuple[int, ...]]:
+    """Tseitin cho t <-> (a XOR b)"""
+    return [(-t, a, b), (-t, -a, -b), (t, -a, b), (t, a, -b)]
+
+
+@register_encoder(ParityClue)
+def _encode_parity(clue: ParityClue, vmap: VariableMap) -> CNF:
+    """
+    Chuỗi XOR Tseitin, dùng biến phụ: p_1 = l_1,  p_i = p_{i-1} XOR l_i
+    Bước cuối không cần biến phụ: ép trực tiếp p_{n-1} XOR l_n = (parity == ODD)
+    """
+    lits = _region_literals(clue, vmap, clue.status)
+
+    want_odd = clue.parity == "ODD"
+    if not lits:
+        return CNF([[]]) if want_odd else CNF()
+    if len(lits) == 1:
+        return CNF([[lits[0] if want_odd else -lits[0]]])
+
+    # Xor Tseitin
+    cnf = CNF()
+    acc = lits[0]
+    for i, lit in enumerate(lits[1:-1], start=2):
+        p = vmap.new_aux(f"{clue.kind}:{clue.region.describe()}:p{i}")
+        cnf.add_clauses(_xor_definition(p, acc, lit))
+        acc = p
+
+    # acc XOR last == want_odd: ODD <-> acc khác last, EVEN <-> acc bằng last
+    last = lits[-1] if want_odd else -lits[-1]
+    cnf.add_clauses([[acc, last], [-acc, -last]])
+    return cnf
+
+
+@register_encoder(ConnectedClue)
+def _encode_connected(clue: ConnectedClue, vmap: VariableMap) -> CNF:
+    # Cấm không cho ô có status còn lại chen vào giữa: với mọi i < j < k: (¬l_i ∨ l_j ∨ ¬l_k)
+    lits = _region_literals(clue, vmap, clue.status)
+    return CNF([-a, b, -c] for a, b, c in combinations(lits, 3))
+
+
+@register_encoder(NoAdjacentClue)
+def _encode_no_adjacent(clue: NoAdjacentClue, vmap: VariableMap) -> CNF:
+    # Mỗi cặp ô kề nhau trong vùng không thể cùng có trạng thái status: (¬l_a ∨ ¬l_b)
+    lit = lambda cell: vmap.status_literal(cell, clue.status)
+    return CNF([-lit(a), -lit(b)] for a, b in adjacent_pairs(clue.region.cells(vmap.board)))
+
+
+@register_encoder(OneOfKClue)
+def _encode_one_of_k(clue: OneOfKClue, vmap: VariableMap) -> CNF:
+    # Người đó mang trạng thái status và k người trong vùng đó có trạng thái là status: l_cell ∧ EXACTLY(k)
+    cnf = CNF([[vmap.status_literal(clue.cell, clue.status)]])
+    cnf.add_clauses(exactly(_region_literals(clue, vmap, clue.status), clue.k))
+    return cnf
+
+
+@register_encoder(IfThenClue)
+def _encode_if_then(clue: IfThenClue, vmap: VariableMap) -> CNF:
+    # Mệnh đề if-then tương đương ¬g ∨ c
+    guard = vmap.status_literal(clue.cell, clue.status)
+    inner = _find_encoder(clue.then_clue)(clue.then_clue, vmap)
+    return CNF((-guard, *c) for c in inner)
 
 # API công khai
 def encode_clue(clue: Clue, vmap: VariableMap) -> CNF:

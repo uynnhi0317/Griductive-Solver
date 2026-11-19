@@ -24,6 +24,8 @@ from game.clue import (
     ExactlyClue,
     FactClue,
     SameClue,
+    IfThenClue,
+    ParityClue,
 )
 from game.region import Column, ExplicitList, Neighbors, Region, Row
 from game.semantics import evaluate_clue, evaluate_clues
@@ -307,3 +309,19 @@ def test_pair_clue_has_exactly_two_clauses(
     assert {frozenset(c) for c in cnf} == make_expected(vmap.var(a), vmap.var(b))
     assert (cnf.tautologies_skipped, cnf.duplicates_skipped) == (0, 0)
     assert vmap.num_aux == 0
+
+# Nhiều clue có biến phụ dùng chung một VariableMap
+def test_encode_clues_with_aux_from_several_clues(board: Board) -> None:
+    """Biến phụ của các clue khác nhau không trùng nhau, và hội CNF vẫn tương đương hội evaluator."""
+    clues = [
+        ParityClue(_row(1), "ODD"),
+        ParityClue(_col("B"), "EVEN", status=Status.INNOCENT),
+        IfThenClue(Cell.parse("C3"), Status.CRIMINAL, ParityClue(_nb("A1"), "ODD")),
+        ExactlyClue(_row(3), 1),
+    ]
+    vmap = VariableMap(board)
+    cnf = encode_clues(clues, vmap)
+    assert vmap.aux_vars() == (10, 11, 12)          # mỗi PARITY trên 3 ô cấp 1 biến phụ, đánh số sau 9 biến chính
+    for bits in _all_bits(board):
+        expected = evaluate_clues(clues, board, _assignment(board, bits))
+        assert _satisfiable_under(cnf, vmap, bits) == expected

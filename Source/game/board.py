@@ -87,6 +87,11 @@ class Board:
             raise ValueError(f"[Board] Chỉ số cột ngoài phạm vi: {col}")
         return tuple(Cell(r, col) for r in range(1, self._size + 1))
 
+    def cells_with_profession(self, profession: str) -> tuple[Cell, ...]:
+        """Các ô có nhân vật làm nghề profession theo row-major"""
+        key = profession.strip().casefold()
+        return tuple(c for c in self._cells if self._by_cell[c].profession.strip().casefold() == key)
+
     def neighbor_cells(self, cell: Cell) -> tuple[Cell, ...]:
         """Lấy các ô neighbor"""
         self._require(cell)
