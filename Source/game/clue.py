@@ -16,6 +16,8 @@ from .phrasing import (
     status_phrase,
 )
 
+def _is_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
 
 class Clue(ABC):
     """Một manh mối có cấu trúc"""
@@ -179,7 +181,7 @@ class _CountClue(Clue):
     k: int
 
     def __post_init__(self) -> None:
-        if not isinstance(self.k, int):
+        if not _is_int(self.k):
             raise ValueError(f"[{self.kind}]: k phải là số nguyên, nhận được {self.k!r}")
         if self.k < 0:
             raise ValueError(f"[{self.kind}]: k phải >= 0, nhận được {self.k}")
@@ -373,7 +375,7 @@ class OneOfKClue(_RegionStatusClue):
 
     def __post_init__(self) -> None:
         self._check_region_status()
-        if not isinstance(self.k, int):
+        if not _is_int(self.k):
             raise ValueError(f"[{self.kind}]: k phải là số nguyên, nhận được {self.k!r}")
         if self.k < 1:
             raise ValueError(f"[{self.kind}]: k phải >= 1, nhận được {self.k}")
