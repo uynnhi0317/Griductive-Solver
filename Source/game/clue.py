@@ -1,12 +1,23 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, ClassVar, Mapping
 
 from .board import Board
 from .cell import Cell
 from .character import Status
-from .region import Region, region_from_dict
+from .region import Column, Region, Row, region_from_dict
+from .phrasing import (
+    among,
+    count_sentence,
+    inline,
+    one_of_k_sentence,
+    parity_sentence,
+    status_noun,
+    status_phrase,
+)
 
+def _is_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
 
 class Clue(ABC):
     """Một manh mối có cấu trúc"""
@@ -69,6 +80,20 @@ def _name(board: Board, cell: Cell) -> str:
     """Trả về tên nhân vật tại một ô"""
     return board.character_at(cell).name
 
+def _require_fields(kind: str, data: Mapping[str, Any], *fields: str) -> None:
+    """Ném ValueError nếu dict thiếu một trong các trường bắt buộc"""
+    for field in fields:
+        if field not in data:
+            raise ValueError(f"[{kind}]: Thiếu trường '{field}'")
+
+
+def _status_from(kind: str, raw: Any) -> Status:
+    """Đọc trạng thái từ chuỗi 'CRIMINAL' / 'INNOCENT'"""
+    try:
+        return Status(raw)
+    except (ValueError, TypeError):
+        raise ValueError(f"[{kind}]: Trạng thái không hợp lệ: {raw!r}") from None
+
 
 @register_clue
 @dataclass(frozen=True)
@@ -92,22 +117,12 @@ class FactClue(Clue):
         return {"type": self.kind, "cell": self.cell.label, "status": self.status.value}
 
     def describe(self, board: Board) -> str:
-        word = "a criminal" if self.status is Status.CRIMINAL else "innocent"
-        return f"{_name(board, self.cell)} is {word}"
+        return f"{_name(board, self.cell)} is {status_phrase(self.status)}"
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "FactClue":
-        for field in ("cell", "status"):
-            if field not in data:
-                raise ValueError(f"[FACT]: Thiếu trường '{field}'")
-
-        status_raw = data["status"]
-        try:
-            status = Status[status_raw]
-        except (KeyError, TypeError):
-            raise ValueError(f"[FACT]: Trạng thái không hợp lệ: {status_raw!r}") from None
-
-        return cls(Cell.parse(data["cell"]), status)
+        _require_fields(cls.kind, data, "cell", "status")
+        return cls(Cell.parse(data["cell"]), _status_from(cls.kind, data["status"]))
 
 
 @dataclass(frozen=True)
@@ -164,10 +179,9 @@ class _CountClue(Clue):
     """Cơ sở chung cho clue đếm số tội phạm trong một vùng"""
     region: Region
     k: int
-    phrase: ClassVar[str]  # Từ ngữ biểu thị tương ứng với kind: Exactly/At least/At most
 
     def __post_init__(self) -> None:
-        if not isinstance(self.k, int):
+        if not _is_int(self.k):
             raise ValueError(f"[{self.kind}]: k phải là số nguyên, nhận được {self.k!r}")
         if self.k < 0:
             raise ValueError(f"[{self.kind}]: k phải >= 0, nhận được {self.k}")
@@ -186,17 +200,11 @@ class _CountClue(Clue):
         return {"type": self.kind, "k": self.k, "region": self.region.to_dict()}
 
     def describe(self, board: Board) -> str:
-        n = len(self.region.cells(board))
-        return f"{self.phrase} {self.k} of the {n} cells in {self.region.describe()} are criminals"
+        return count_sentence(self.region, board, self.kind, self.k)
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "_CountClue":
-        if "k" not in data:
-            raise ValueError(f"[{cls.kind}]: Thiếu trường 'k'")
-
-        if "region" not in data:
-            raise ValueError(f"[{cls.kind}]: Thiếu trường 'region'")
-        
+        _require_fields(cls.kind, data, "k", "region")
         return cls(region_from_dict(data["region"]), data["k"])
 
 
@@ -205,12 +213,6 @@ class _CountClue(Clue):
 class ExactlyClue(_CountClue):
     """Đúng k tội phạm trong vùng"""
     kind: ClassVar[str] = "EXACTLY"
-    phrase: ClassVar[str] = "Exactly"
-
-    def describe(self, board: Board) -> str:
-        if self.k == 0:
-            return f"No criminals in {self.region.describe()}"
-        return super().describe(board)
 
 
 @register_clue
@@ -218,7 +220,6 @@ class ExactlyClue(_CountClue):
 class AtLeastClue(_CountClue):
     """Ít nhất k tội phạm trong vùng"""
     kind: ClassVar[str] = "AT_LEAST"
-    phrase: ClassVar[str] = "At least"
 
 
 @register_clue
@@ -226,4 +227,215 @@ class AtLeastClue(_CountClue):
 class AtMostClue(_CountClue):
     """Nhiều nhất k tội phạm trong vùng"""
     kind: ClassVar[str] = "AT_MOST"
-    phrase: ClassVar[str] = "At most"
+
+# ============================================================================
+# Clue extensions: Clue mở rộng
+# ============================================================================
+
+_PARITIES = ("ODD", "EVEN")
+
+
+def _is_adjacent(a: Cell, b: Cell) -> bool:
+    """Kiểm tra hai ô kề nhau theo 8 hướng"""
+    return a != b and max(abs(a.row - b.row), abs(a.col - b.col)) == 1
+
+
+def adjacent_pairs(cells: tuple[Cell, ...]) -> tuple[tuple[Cell, Cell], ...]:
+    """Các cặp ô kề nhau trong một tập ô, theo thứ tự xác định"""
+    ordered = sorted(cells)
+    return tuple(
+        (a, b) for i, a in enumerate(ordered) for b in ordered[i + 1:] if _is_adjacent(a, b)
+    )
+
+
+def _optional_status(kind: str, data: Mapping[str, Any]) -> Status:
+    """Trường status tuỳ chọn"""
+    return _status_from(kind, data.get("status", Status.CRIMINAL.value))
+
+
+@dataclass(frozen=True)
+class _RegionStatusClue(Clue):
+    """
+    Cơ sở chung cho clue mở rộng nói về những người có trạng thái status trong một vùng.
+    """
+    region: Region
+    status: Status = field(default=Status.CRIMINAL, kw_only=True)
+
+    def _check_region_status(self) -> None:
+        if not isinstance(self.region, Region):
+            raise ValueError(f"[{self.kind}]: region không hợp lệ, nhận được {self.region!r}")
+        if not isinstance(self.status, Status):
+            raise ValueError(f"[{self.kind}]: Trạng thái không hợp lệ: {self.status!r}")
+
+    def referenced_cells(self, board: Board) -> tuple[Cell, ...]:
+        return self.region.cells(board)
+
+    def _to_dict(self, **fields: Any) -> dict[str, Any]:
+        return {"type": self.kind, "status": self.status.value, **fields, "region": self.region.to_dict()}
+
+    @property
+    def _plural(self) -> str:
+        """Viết danh từ số nhiều"""
+        return status_noun(self.status, 2)
+
+
+@register_clue
+@dataclass(frozen=True)
+class ParityClue(_RegionStatusClue):
+    """Số người có trạng thái status trong vùng là lẻ (ODD) hoặc chẵn (EVEN)"""
+    kind: ClassVar[str] = "PARITY"
+    parity: str
+
+    def __post_init__(self) -> None:
+        self._check_region_status()
+        if self.parity not in _PARITIES:
+            raise ValueError(f"[{self.kind}]: parity phải là ODD hoặc EVEN, nhận được {self.parity!r}")
+
+    def validate(self, board: Board) -> None:
+        cells = self.region.cells(board)
+        if self.parity == "ODD" and not cells:
+            raise ValueError(f"[{self.kind}]: Vùng rỗng không thể có số lẻ người")
+
+    def to_dict(self) -> dict[str, Any]:
+        return self._to_dict(parity=self.parity)
+
+    def describe(self, board: Board) -> str:
+        return parity_sentence(self.region, board, self.parity == "ODD", self.status)
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "ParityClue":
+        _require_fields(cls.kind, data, "parity", "region")
+        return cls(region_from_dict(data["region"]), data["parity"], status=_optional_status(cls.kind, data))
+
+
+@register_clue
+@dataclass(frozen=True)
+class ConnectedClue(_RegionStatusClue):
+    """
+    Những người có trạng thái status trên một hàng/cột nằm liền nhau.
+    """
+    kind: ClassVar[str] = "CONNECTED"
+
+    def __post_init__(self) -> None:
+        self._check_region_status()
+        if not isinstance(self.region, (Row, Column)):
+            raise ValueError(f"[{self.kind}]: Chỉ áp dụng cho ROW hoặc COLUMN, nhận được {self.region!r}")
+
+    def validate(self, board: Board) -> None:
+        cells = self.region.cells(board)
+        if len(cells) < 3:
+            raise ValueError(f"[{self.kind}]: {self.region.describe()} chỉ có {len(cells)} ô, cần ít nhất 3 ô để clue có ý nghĩa")
+
+    def to_dict(self) -> dict[str, Any]:
+        return self._to_dict()
+
+    def describe(self, board: Board) -> str:
+        return f"All {self._plural} in {self.region.describe(board)} are connected"
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "ConnectedClue":
+        _require_fields(cls.kind, data, "region")
+        return cls(region_from_dict(data["region"]), status=_optional_status(cls.kind, data))
+
+
+@register_clue
+@dataclass(frozen=True)
+class NoAdjacentClue(_RegionStatusClue):
+    """Không có hai người có trạng thái status nào trong vùng kề nhau (neighbors)"""
+    kind: ClassVar[str] = "NO_ADJACENT"
+
+    def __post_init__(self) -> None:
+        self._check_region_status()
+
+    def validate(self, board: Board) -> None:
+        if not adjacent_pairs(self.region.cells(board)):
+            raise ValueError(f"[{self.kind}]: {self.region.describe()} không có cặp ô kề nhau nào, clue vô nghĩa")
+
+    def to_dict(self) -> dict[str, Any]:
+        return self._to_dict()
+
+    def describe(self, board: Board) -> str:
+        return f"No two {self._plural} {among(self.region, board)} are next to each other"
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "NoAdjacentClue":
+        _require_fields(cls.kind, data, "region")
+        return cls(region_from_dict(data["region"]), status=_optional_status(cls.kind, data))
+
+
+@register_clue
+@dataclass(frozen=True)
+class OneOfKClue(_RegionStatusClue):
+    """
+    Nhân vật tại ô cell là một trong đúng k người có trạng thái status trong vùng
+    """
+    kind: ClassVar[str] = "ONE_OF_K"
+    cell: Cell
+    k: int
+
+    def __post_init__(self) -> None:
+        self._check_region_status()
+        if not _is_int(self.k):
+            raise ValueError(f"[{self.kind}]: k phải là số nguyên, nhận được {self.k!r}")
+        if self.k < 1:
+            raise ValueError(f"[{self.kind}]: k phải >= 1, nhận được {self.k}")
+
+    def validate(self, board: Board) -> None:
+        _require_in_board(board, self.cell)
+        cells = self.region.cells(board)
+        if self.cell not in cells:
+            raise ValueError(f"[{self.kind}]: Ô {self.cell.label} không thuộc {self.region.describe()}")
+        if self.k > len(cells):
+            raise ValueError(f"[{self.kind}]: k = {self.k} ngoài đoạn [1, {len(cells)}] của {self.region.describe()}")
+
+    def to_dict(self) -> dict[str, Any]:
+        return self._to_dict(cell=self.cell.label, k=self.k)
+
+    def describe(self, board: Board) -> str:
+        return one_of_k_sentence(_name(board, self.cell), self.region, board, self.k, self.status)
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "OneOfKClue":
+        _require_fields(cls.kind, data, "cell", "k", "region")
+        return cls(cell=Cell.parse(data["cell"]), region=region_from_dict(data["region"]), 
+                   k=data["k"], status=_optional_status(cls.kind, data))
+
+
+@register_clue
+@dataclass(frozen=True)
+class IfThenClue(Clue):
+    """Nếu nhân vật tại cell có trạng thái status thì clue then_clue đúng"""
+    kind: ClassVar[str] = "IF_THEN"
+    cell: Cell
+    status: Status
+    then_clue: Clue
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.status, Status):
+            raise ValueError(f"[{self.kind}]: Trạng thái không hợp lệ: {self.status!r}")
+        if not isinstance(self.then_clue, Clue):
+            raise ValueError(f"[{self.kind}]: Vế sau phải là Clue, nhận được {self.then_clue!r}")
+
+    def validate(self, board: Board) -> None:
+        _require_in_board(board, self.cell)
+        try:
+            self.then_clue.validate(board)
+        except ValueError as exc:
+            raise ValueError(f"[{self.kind}]: Vế sau không hợp lệ: {exc}") from None
+
+    def referenced_cells(self, board: Board) -> tuple[Cell, ...]:
+        return tuple(sorted({self.cell, *self.then_clue.referenced_cells(board)}))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"type": self.kind, "cell": self.cell.label, "status": self.status.value, "then": self.then_clue.to_dict()}
+
+    def describe(self, board: Board) -> str:
+        then_text = inline(self.then_clue.describe(board))
+        return f"If {_name(board, self.cell)} is {status_phrase(self.status)}, {then_text}"
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "IfThenClue":
+        _require_fields(cls.kind, data, "cell", "status", "then")
+        if not isinstance(data["then"], Mapping):
+            raise ValueError(f"[{cls.kind}]: 'then' phải là một clue (object JSON)")
+        return cls(Cell.parse(data["cell"]), _status_from(cls.kind, data["status"]), clue_from_dict(data["then"]))

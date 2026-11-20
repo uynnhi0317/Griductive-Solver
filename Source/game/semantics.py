@@ -18,6 +18,12 @@ from .clue import (
     ExactlyClue,
     FactClue,
     SameClue,
+    ConnectedClue,
+    IfThenClue,
+    NoAdjacentClue,
+    OneOfKClue,
+    ParityClue,
+    adjacent_pairs,
 )
 
 # Phép gán đầy đủ từ từng ô trên bàn cờ sang trạng thái CRIMINAL / INNOCENT
@@ -129,6 +135,46 @@ def _eval_at_least(clue: AtLeastClue, board: Board, assignment: Assignment) -> b
 @register_evaluator(AtMostClue)
 def _eval_at_most(clue: AtMostClue, board: Board, assignment: Assignment) -> bool:
     return _criminals_in_region(clue, board, assignment) <= clue.k
+
+
+
+# Clue mở rộng
+def _cells_with_status(clue, board: Board, assignment: Assignment) -> list[Cell]:
+    """Các ô trong vùng của clue có trạng thái clue.status, giữ thứ tự của vùng"""
+    return [cell for cell in clue.region.cells(board) if assignment[cell] is clue.status]
+
+
+@register_evaluator(ParityClue)
+def _eval_parity(clue: ParityClue, board: Board, assignment: Assignment) -> bool:
+    odd = len(_cells_with_status(clue, board, assignment)) % 2 == 1
+    return odd == (clue.parity == "ODD")
+
+
+@register_evaluator(ConnectedClue)
+def _eval_connected(clue: ConnectedClue, board: Board, assignment: Assignment) -> bool:
+    line = clue.region.cells(board)
+    positions = [i for i, cell in enumerate(line) if assignment[cell] is clue.status]
+    return not positions or positions[-1] - positions[0] + 1 == len(positions)
+
+
+@register_evaluator(NoAdjacentClue)
+def _eval_no_adjacent(clue: NoAdjacentClue, board: Board, assignment: Assignment) -> bool:
+    return not any(
+        assignment[a] is clue.status and assignment[b] is clue.status
+        for a, b in adjacent_pairs(clue.region.cells(board))
+    )
+
+
+@register_evaluator(OneOfKClue)
+def _eval_one_of_k(clue: OneOfKClue, board: Board, assignment: Assignment) -> bool:
+    return (assignment[clue.cell] is clue.status and len(_cells_with_status(clue, board, assignment)) == clue.k)
+
+
+@register_evaluator(IfThenClue)
+def _eval_if_then(clue: IfThenClue, board: Board, assignment: Assignment) -> bool:
+    if assignment[clue.cell] is not clue.status:
+        return True
+    return evaluate_clue_unchecked(clue.then_clue, board, assignment)
 
 
 # public API
