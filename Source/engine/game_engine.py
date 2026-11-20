@@ -12,19 +12,32 @@ Game Engine
   INCONSISTENT không xảy ra với puzzle hợp lệ (đáp án luôn là một model của KB_t),
   chỉ giữ lại để không báo nhầm thành NOT_PROVABLE khi dữ liệu / encoder có lỗi
 + PublicState bất biến nên verdict bị từ chối không thể làm đổi state hay lộ clue
-+ Lật thẻ (_reveal) private: mọi lần lật đều phải đi qua submit_port vòng.
++ Lật thẻ (_reveal) private: mọi lần lật đều phải đi qua submit_verdict
++ Đếm SAT query: mỗi VerdictResult ghi đủ các lần gọi solver trong lần nộp đó,
+  gồm cả truy vấn kiểm tra KB_t (chỉ chạy ở lần nộp đầu tiên trên mỗi state)
++ EngineInvariantError: verdict đã chứng minh lại khác đáp án (lỗi encoder / solver),
+  GUI bắt riêng loại lỗi này để báo lỗi nội bộ thay vì sập app
 """
 
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-from agent.entailment import CellClassification, EntailmentChecker, Verdict
+from agent.entailment import CellClassification, EntailmentChecker, SatQuery, Verdict
 from game.board import Board
 from game.cell import Cell
 from game.character import Status
 from game.public_state import PublicState, RevealedCard
 from game.puzzle_loader import PuzzleFull, load_puzzle
+
+
+class EngineInvariantError(RuntimeError):
+    """
+    Bất biến của engine bị vi phạm: verdict đã được chứng minh từ KB_t nhưng khác đáp án ẩn
+    + Không phải lỗi đầu vào nên kế thừa RuntimeError, KHÔNG kế thừa ValueError
+      (tránh bị các khối except ValueError bắt nhầm)
+    + Khi lỗi xảy ra, state và history giữ nguyên
+    """
 
 
 class VerdictOutcome(Enum):
@@ -41,7 +54,8 @@ class VerdictResult:
     cell: Cell
     submitted: Status
     outcome: VerdictOutcome
-    classification: CellClassification      # SAT query engine đã dùng để phán xử (tách riêng với query của agent)
+    classification: CellClassification      # truy vấn phân loại ô (tách riêng với query của agent)
+    consistency: SatQuery | None = None     # truy vấn kiểm tra KB_t, chỉ có ở lần nộp đầu tiên trên mỗi state
     revealed: RevealedCard | None = None    # thẻ vừa lật, chỉ có khi ACCEPTED
 
     @property
@@ -49,8 +63,15 @@ class VerdictResult:
         return self.outcome is VerdictOutcome.ACCEPTED
 
     @property
+    def queries(self) -> tuple[SatQuery, ...]:
+        """Mọi lần gọi solver trong lần nộp này, theo thứ tự chạy"""
+        head = () if self.consistency is None else (self.consistency,)
+        return head + self.classification.queries
+
+    @property
     def sat_queries(self) -> int:
-        return self.classification.sat_queries
+        """Số lần gọi solver trong lần nộp này, gồm cả truy vấn kiểm tra KB_t nếu có"""
+        return len(self.queries)
 
 
 class GameEngine:
@@ -117,34 +138,43 @@ class GameEngine:
         """Phán xử verdict 'ô cell có trạng thái status'; chỉ đổi state khi ACCEPTED"""
         self._check_submission(cell, status)
 
-        classification = self._entailment().classify(cell)
+        checker, consistency = self._entailment()
+        classification = checker.classify(cell)
         outcome = _decide(classification.verdict, status)
 
         revealed = None
         if outcome is VerdictOutcome.ACCEPTED:
             revealed = self._reveal(cell, status)
 
-        result = VerdictResult(cell, status, outcome, classification, revealed)
+        result = VerdictResult(cell, status, outcome, classification,
+                               consistency=consistency, revealed=revealed)
         self._history.append(result)
         return result
 
     # Nội bộ
 
-    def _entailment(self) -> EntailmentChecker:
+    def _entailment(self) -> tuple[EntailmentChecker, SatQuery | None]:
         """
         Checker cho state hiện tại, chỉ dựng lại khi state đổi
         (nhiều verdict bị từ chối liên tiếp trên cùng state dùng chung một KB_t)
+        + Khi dựng mới: chạy luôn truy vấn kiểm tra KB_t và trả về để tính vào lần nộp này;
+          checker lưu kết quả nên classify không gọi solver lần nữa cho truy vấn này
+        + Khi dùng lại: trả None vì truy vấn đó đã được tính ở lần nộp trước
+        + Chỉ lưu checker sau khi truy vấn chạy xong: nếu SolverTimeout thì lần sau dựng lại từ đầu
         """
-        if self._checker is None:
-            self._checker = EntailmentChecker(self._state, self._time_limit)
-        return self._checker
+        if self._checker is not None:
+            return self._checker, None
+        checker = EntailmentChecker(self._state, self._time_limit)
+        consistency = checker.consistency_query()
+        self._checker = checker
+        return checker, consistency
 
     def _reveal(self, cell: Cell, status: Status) -> RevealedCard:
         """Lật thẻ: thêm verdict và clue của ô vào public state"""
         # solution luôn là một model của KB_t (clue đều đúng, verdict cũ đều đúng),
         # nên verdict đã được chứng minh mà khác đáp án nghĩa là encoder / solver có lỗi
         if self._puzzle.solution[cell] is not status:
-            raise RuntimeError(
+            raise EngineInvariantError(
                 f"[GameEngine]: Verdict {status.value} tại {cell.label} được chứng minh "
                 f"nhưng khác đáp án, kiểm tra lại encoder / solver"
             )
