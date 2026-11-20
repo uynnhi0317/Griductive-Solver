@@ -1,63 +1,119 @@
+"""
+Design tokens của GUI. Đây là NƠI DUY NHẤT được phép chứa màu / cỡ chữ / khoảng cách thô.
+
++ Màu đặt tên theo VAI TRÒ (surface_2, text_dim...), không theo chỗ dùng (select_card_back...)
++ Component khác chỉ import Color, Size, Space, Radius; không viết tuple RGB hay số pixel rời rạc
++ Font: nạp từ gui/assets/fonts/ nếu có file, không thì dùng SysFont (xem get_font)
+"""
+
+import functools
+from pathlib import Path
+
 import pygame
+
 from game.character import Status
 from .highlight import Role
 
-PALETTE= {
-    "card_back": (125, 124, 138, 255),
-    "criminal": (184, 36, 33, 255),
-    "innocent": (30, 150, 58, 255),
-    "highlight": (247, 223, 40, 255),
-    "select_criminal": (235, 71, 68, 255),
-    "select_innocent": (81, 224, 114, 255),
-    "select_card_back": (201, 200, 222, 255),
-    "bg": (22, 20, 28, 255),
-    "text": (226, 217, 255, 255),
-    "hover": (220, 220, 220, 100),
-    "selected": (64, 64, 64, 150),
-    # highlight roles
-    "role_subject": (252, 249, 66, 255),
-    "role_counted": (157, 241, 252, 255),
-    "role_condition": (202, 59, 209, 255),
-    # clue panel
-    "panel_bg": (32, 29, 41, 255),
-    "panel_row": (44, 40, 56, 255),
-    "panel_row_hover": (56, 51, 72, 255),
-    "panel_row_selected": (66, 60, 88, 255),
-    "text_dim": (150, 143, 175, 255),
-}
+
+def _hex(value: str, alpha: int = 255) -> tuple[int, int, int, int]:
+    v = value.lstrip("#")
+    return int(v[0:2], 16), int(v[2:4], 16), int(v[4:6], 16), alpha
+
+
+class Color:
+    # nền và bề mặt (sáng dần theo độ nổi)
+    bg = _hex("12101A")
+    surface_1 = _hex("1B1826")       # panel, toolbar
+    surface_2 = _hex("262235")       # dòng clue, nút
+    surface_3 = _hex("322D45")       # hover trên surface
+    border = _hex("3A3552")          # đường chia, viền panel
+
+    # chữ
+    text = _hex("EDE9FF")
+    text_dim = _hex("A9A2C7")
+    text_disabled = _hex("6B6585")
+
+    # thẻ
+    card_back = _hex("2F2B44")       # thẻ úp, tương phản với text ~11:1
+    card_back_hover = _hex("3A3556")
+    card_border = _hex("5A5380")
+    criminal = _hex("B8323F")
+    innocent = _hex("17795A")
+    badge_bg = _hex("12101A")        # nền huy hiệu trạng thái, luôn tối để biểu tượng sáng nổi lên
+
+    # tương tác (cố ý trung tính để không đụng với 3 màu role và 2 màu trạng thái)
+    focus = _hex("F4F1FF")
+    hover_overlay = (255, 255, 255, 22)
+
+    # vai trò khi highlight clue
+    role_subject = _hex("FFD84D")
+    role_counted = _hex("6FE3F5")
+    role_condition = _hex("D86BE0")
+
+    # phản hồi (toast, dùng ở P2)
+    fb_info = _hex("5AA9FF")
+    fb_warn = _hex("F2B84B")
+    fb_error = _hex("FF6B6B")
+    fb_ok = _hex("4FD18B")
+
+
+class Space:
+    """Thang khoảng cách: chỉ dùng các giá trị này cho padding / gap"""
+    xs, sm, md, lg, xl, xxl = 4, 8, 12, 16, 24, 32
+
+
+class Size:
+    """Thang cỡ chữ (pixel, dùng với font TTF)"""
+    caption, body, h2, title = 14, 18, 22, 28
+
+
+class Radius:
+    card = 10
+    control = 8
+
 
 STATUS_COLOR = {
-    Status.CRIMINAL: PALETTE["criminal"],
-    Status.INNOCENT: PALETTE["innocent"],
-}
-
-SELECT_COLOR = {
-    Status.CRIMINAL: PALETTE["select_criminal"],
-    Status.INNOCENT: PALETTE["select_innocent"],
+    Status.CRIMINAL: Color.criminal,
+    Status.INNOCENT: Color.innocent,
 }
 
 ROLE_COLOR = {
-    Role.SUBJECT: PALETTE["role_subject"],
-    Role.COUNTED: PALETTE["role_counted"],
-    Role.CONDITION: PALETTE["role_condition"],
+    Role.SUBJECT: Color.role_subject,
+    Role.COUNTED: Color.role_counted,
+    Role.CONDITION: Color.role_condition,
 }
 
-_fonts: dict[int, pygame.font.Font] = {}
-def get_font(size: int) -> pygame.font.Font:
-    if size not in _fonts:
-        _fonts[size] = pygame.font.Font(None, size)
-    return _fonts[size]
 
-def fit_font(text, max_size, max_width):
+# ------------------------------------------------------------------ fonts
+FONT_DIR = Path(__file__).resolve().parent / "assets" / "fonts"
+_FONT_FILES = {False: "Inter-Regular.ttf", True: "Inter-SemiBold.ttf"}
+_FALLBACK_FAMILIES = "segoeui,helveticaneue,helvetica,arial,dejavusans"
+
+
+@functools.lru_cache(maxsize=None)
+def get_font(size: int, bold: bool = False) -> pygame.font.Font:
+    """Font TTF đóng gói theo dự án; thiếu file thì rơi về font hệ thống"""
+    path = FONT_DIR / _FONT_FILES[bold]
+    if path.is_file():
+        return pygame.font.Font(str(path), size)
+    return pygame.font.SysFont(_FALLBACK_FAMILIES, size, bold=bold)
+
+
+@functools.lru_cache(maxsize=1024)
+def render_text(text: str, size: int, color: tuple, bold: bool = False) -> pygame.Surface:
+    """
+    Render chữ có cache theo (text, size, color, bold).
+    Surface trả về được dùng chung giữa các lần gọi: KHÔNG được sửa nó.
+    """
+    return get_font(size, bold).render(text, True, color)
+
+
+def fit_font(text: str, max_size: int, max_width: int, bold: bool = False) -> pygame.font.Font:
     size = max(8, max_size)
-    while size > 8 and get_font(size).size(text)[0] > max_width:
+    while size > 8 and get_font(size, bold).size(text)[0] > max_width:
         size -= 1
-    return get_font(size)
+    return get_font(size, bold)
 
-def draw_rect_alpha(surface, color, rect, radius=0):
-    shape = pygame.Surface(pygame.Rect(rect).size, pygame.SRCALPHA)
-    pygame.draw.rect(shape, color, shape.get_rect(), border_radius=radius)
-    surface.blit(shape, rect)
 
 def wrap_text(text: str, font: pygame.font.Font, max_width: int) -> list[str]:
     """Ngắt dòng theo từ; từ dài hơn max_width vẫn nằm trên một dòng riêng"""
@@ -84,3 +140,27 @@ def fit_wrapped(text: str, max_width: int, max_height: int, max_size: int, min_s
             return font, lines
     font = get_font(min_size)
     return font, wrap_text(text, font, max_width)
+
+
+# ---------------------------------------------------------------- drawing
+def draw_rect_alpha(surface, color, rect, radius=0):
+    shape = pygame.Surface(pygame.Rect(rect).size, pygame.SRCALPHA)
+    pygame.draw.rect(shape, color, shape.get_rect(), border_radius=radius)
+    surface.blit(shape, rect)
+
+
+def draw_status_icon(surface: pygame.Surface, status: Status, cx: int, cy: int, r: int) -> None:
+    """
+    Huy hiệu trạng thái không phụ thuộc màu: dấu X (criminal) hoặc dấu tích (innocent)
+    trong vòng tròn tối. Dùng chung cho thẻ và panel để hai nơi luôn khớp nhau.
+    """
+    pygame.draw.circle(surface, Color.badge_bg, (cx, cy), r)
+    pygame.draw.circle(surface, Color.text, (cx, cy), r, width=max(1, r // 7))
+    d = r * 0.42
+    width = max(2, r // 4)
+    if status is Status.CRIMINAL:
+        pygame.draw.line(surface, Color.text, (cx - d, cy - d), (cx + d, cy + d), width)
+        pygame.draw.line(surface, Color.text, (cx - d, cy + d), (cx + d, cy - d), width)
+    else:
+        pts = [(cx - d, cy + d * 0.05), (cx - d * 0.25, cy + d * 0.8), (cx + d, cy - d * 0.7)]
+        pygame.draw.lines(surface, Color.text, False, pts, width)

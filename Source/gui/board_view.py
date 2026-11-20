@@ -4,24 +4,25 @@ from game.public_state import PublicState
 from game.cell import Cell
 from .highlight import Role
 from .character_card import CharacterCard, CardModel
-from .theme import get_font, PALETTE
+from .theme import Color, Size, Space, render_text
 
 LABEL_MARGIN = 40
-PAD = 24
+PAD = Space.xl
+
 
 class BoardView:
-    def __init__(self, state: PublicState, area: pygame.Rect, gap: int = 8):
+    def __init__(self, state: PublicState, area: pygame.Rect, gap: int = Space.sm):
         self.n = state.board.size
         self.gap = gap
         self._compute_layout(area)
-        self.cards = {cell: CharacterCard(self.slot_rect(cell), 
+        self.cards = {cell: CharacterCard(self.slot_rect(cell),
                             self._model_for(state, cell)) for cell in state.board.cells()}
 
-    #________________________________________________________________layout
+    # ________________________________________________________________layout
     def _compute_layout(self, area: pygame.Rect):
         w, h = area.size
-        avail = min(w, h) - 2*PAD - LABEL_MARGIN
-        self.cell_size = max(5, (avail - (self.n - 1)*self.gap) // self.n)
+        avail = min(w, h) - 2 * PAD - LABEL_MARGIN
+        self.cell_size = max(5, (avail - (self.n - 1) * self.gap) // self.n)
         self.pitch = self.cell_size + self.gap
         board_px = self.n * self.cell_size + (self.n - 1) * self.gap
         self.o_x = area.x + (w - board_px) // 2 + LABEL_MARGIN // 2
@@ -32,7 +33,7 @@ class BoardView:
         for cell, card in self.cards.items():
             card.relayout(self.slot_rect(cell))
 
-    #___________________________________________________________________board
+    # ___________________________________________________________________board
     @staticmethod
     def _model_for(state: PublicState, cell: Cell) -> CardModel:
         clue = state.revealed_clues().get(cell)
@@ -49,16 +50,19 @@ class BoardView:
     def cell_at_pixel(self, pos) -> Cell | None:   # for click handling
         pixel_x, pixel_y = pos
         dx, dy = pixel_x - self.o_x, pixel_y - self.o_y
-        if (dx < 0 or dy < 0): return None                  # outside grid, above or to the left
+        if dx < 0 or dy < 0:
+            return None                                     # outside grid, above or to the left
 
         col0, rx = divmod(dx, self.pitch)
         row0, ry = divmod(dy, self.pitch)
-        if row0 >= self.n or col0 >= self.n: return None    # outside grid, below or to the right
-        if rx >= self.cell_size or ry >= self.cell_size: return None        # in between cards
+        if row0 >= self.n or col0 >= self.n:
+            return None                                     # outside grid, below or to the right
+        if rx >= self.cell_size or ry >= self.cell_size:
+            return None                                     # in between cards
 
         return Cell(row0 + 1, col0 + 1)
 
-    #______________________________________________________update
+    # ______________________________________________________update
     def refresh(self, state: PublicState) -> None:
         for cell, card in self.cards.items():
             card.sync(self._model_for(state, cell))
@@ -72,13 +76,13 @@ class BoardView:
         for card in self.cards.values():
             card.update(dt)
 
-    #_____________________________________________________show
+    # _____________________________________________________show
     def _draw_labels(self, surface: pygame.Surface) -> None:
-        font = get_font(max(12, self.cell_size // 6))
+        size = max(Size.body, self.cell_size // 7)
         half = LABEL_MARGIN // 2
         for i in range(self.n):
-            row_txt = font.render(str(i + 1), True, PALETTE["text"])
-            col_txt = font.render(chr(ord("A") + i), True, PALETTE["text"])
+            row_txt = render_text(str(i + 1), size, Color.text_dim, True)
+            col_txt = render_text(chr(ord("A") + i), size, Color.text_dim, True)
             row_slot = self.slot_rect(Cell(i + 1, 1))    # first column of row i+1
             col_slot = self.slot_rect(Cell(1, i + 1))    # first row of column i+1
             # numbers: left of the grid, vertically centered on their row
@@ -88,5 +92,9 @@ class BoardView:
 
     def draw(self, surface, selected, hovered) -> None:
         self._draw_labels(surface)
+        # thẻ được chọn vẽ sau cùng để phần phóng to / vòng focus không bị thẻ kề đè lên
         for cell, card in self.cards.items():
-            card.draw(surface, cell == selected, cell == hovered)
+            if cell != selected:
+                card.draw(surface, False, cell == hovered)
+        if selected in self.cards:
+            self.cards[selected].draw(surface, True, selected == hovered)

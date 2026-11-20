@@ -6,7 +6,7 @@ from game.public_state import PublicState
 from .board_view import BoardView
 from .clue_panel import CluePanel
 from .highlight import highlight_roles
-from .theme import PALETTE
+from .theme import Color
 
 PUZZLE_ROOT = Path(__file__).resolve().parent.parent / "puzzles"
 RESCALE_WINDOW = 0.8
@@ -109,7 +109,7 @@ class App:
 
     #______________________________________________________________show        
     def draw(self) -> None:
-        self.screen.fill(PALETTE["bg"])
+        self.screen.fill(Color.bg)
         self.board.draw(self.screen, self.selected, self.hovered)
         self.panel.draw(self.screen)
 

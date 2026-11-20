@@ -4,15 +4,15 @@ from game.cell import Cell
 from game.character import Status
 from game.public_state import PublicState
 from .highlight import Role
-from .theme import (PALETTE, ROLE_COLOR, SELECT_COLOR, STATUS_COLOR,
-                    draw_rect_alpha, get_font, wrap_text)
+from .theme import (Color, ROLE_COLOR, Radius, Size, Space,
+                    draw_rect_alpha, draw_status_icon, get_font, render_text, wrap_text)
 
-PAD = 12            # lề của panel
-ROW_PAD = 10        # lề trong một dòng clue
-ROW_GAP = 8
+PAD = Space.md              # lề của panel
+ROW_PAD = Space.md          # lề trong một dòng clue
+ROW_GAP = Space.sm
 HEADER_H = 44
 FOOTER_H = 34
-RADIUS = 10
+ICON_R = 8
 SCROLLBAR_W = 6
 WHEEL_STEP = 48
 
@@ -42,7 +42,7 @@ class CluePanel:
         self._content_h = 0
         self.refresh(state)
 
-    #________________________________________________________________layout
+    # ________________________________________________________________layout
     @property
     def viewport(self) -> pygame.Rect:
         a = self.area
@@ -53,13 +53,14 @@ class CluePanel:
         return max(0, self._content_h - self.viewport.h)
 
     def _layout(self) -> None:
-        body, tag = get_font(21), get_font(18)
+        body, tag = get_font(Size.body), get_font(Size.caption, True)
         text_w = self.area.w - 2 * PAD - 2 * ROW_PAD - SCROLLBAR_W
         y = 0
         for row in self._rows:
             row.lines = wrap_text(row.text, body, text_w)
             row.top = y
-            row.height = ROW_PAD * 2 + tag.get_linesize() + 4 + len(row.lines) * body.get_linesize()
+            row.height = ROW_PAD * 2 + max(tag.get_linesize(), 2 * ICON_R) + Space.xs \
+                + len(row.lines) * body.get_linesize()
             y += row.height + ROW_GAP
         self._content_h = max(0, y - ROW_GAP)
         self.scroll = max(0, min(self.scroll, self.max_scroll))
@@ -68,7 +69,7 @@ class CluePanel:
         self.area = pygame.Rect(area)
         self._layout()
 
-    #_____________________________________________________________update
+    # _____________________________________________________________update
     def refresh(self, state: PublicState) -> None:
         """Dựng lại danh sách theo thứ tự lật; có clue mới thì tự cuộn xuống cuối"""
         board = state.board
@@ -87,7 +88,7 @@ class CluePanel:
     def on_wheel(self, wheel_y: int) -> None:
         self.scroll_by(-wheel_y * WHEEL_STEP)
 
-    #_______________________________________________________________hit test
+    # _______________________________________________________________hit test
     def _row_rect(self, row: _Row) -> pygame.Rect:
         vp = self.viewport
         return pygame.Rect(vp.x + PAD, vp.y + row.top - self.scroll,
@@ -102,12 +103,12 @@ class CluePanel:
                 return row.cell
         return None
 
-    #_________________________________________________________________show
+    # _________________________________________________________________show
     def draw(self, surface: pygame.Surface) -> None:
         a = self.area
-        pygame.draw.rect(surface, PALETTE["panel_bg"], a, border_radius=RADIUS)
+        pygame.draw.rect(surface, Color.surface_1, a, border_radius=Radius.card)
 
-        title = get_font(28).render(f"Clues ({len(self._rows)})", True, PALETTE["text"])
+        title = render_text(f"Clues ({len(self._rows)})", Size.title, Color.text, True)
         surface.blit(title, (a.x + PAD, a.y + (HEADER_H - title.get_height()) // 2 + 2))
 
         vp = self.viewport
@@ -115,7 +116,7 @@ class CluePanel:
         old_clip = surface.get_clip()
         surface.set_clip(vp)
         if not self._rows:
-            msg = get_font(21).render("No clues revealed yet", True, PALETTE["text_dim"])
+            msg = render_text("No clues revealed yet", Size.body, Color.text_dim)
             surface.blit(msg, msg.get_rect(center=vp.center))
         for row in self._rows:
             rect = self._row_rect(row)
@@ -127,21 +128,20 @@ class CluePanel:
         self._draw_legend(surface)
 
     def _draw_row(self, surface, row: _Row, rect: pygame.Rect, selected: bool, hovered: bool) -> None:
-        bg = (PALETTE["panel_row_selected"] if selected
-              else PALETTE["panel_row_hover"] if hovered else PALETTE["panel_row"])
-        pygame.draw.rect(surface, bg, rect, border_radius=8)
+        bg = Color.surface_3 if (selected or hovered) else Color.surface_2
+        pygame.draw.rect(surface, bg, rect, border_radius=Radius.control)
         if selected:
-            pygame.draw.rect(surface, SELECT_COLOR[row.status], rect, width=2, border_radius=8)
+            pygame.draw.rect(surface, Color.focus, rect, width=2, border_radius=Radius.control)
 
-        tag_font, body_font = get_font(18), get_font(21)
+        body_font = get_font(Size.body)
         x, y = rect.x + ROW_PAD, rect.y + ROW_PAD
-        pygame.draw.circle(surface, STATUS_COLOR[row.status], (x + 5, y + tag_font.get_linesize() // 2), 5)
-        tag = tag_font.render(f"{row.cell.label}  {row.name}", True, PALETTE["text_dim"])
-        surface.blit(tag, (x + 16, y))
+        draw_status_icon(surface, row.status, x + ICON_R, y + ICON_R, ICON_R)
+        tag = render_text(f"{row.cell.label}  {row.name}", Size.caption, Color.text_dim, True)
+        surface.blit(tag, tag.get_rect(midleft=(x + 2 * ICON_R + Space.sm, y + ICON_R)))
 
-        y += tag_font.get_linesize() + 4
+        y += 2 * ICON_R + Space.xs
         for line in row.lines:
-            surface.blit(body_font.render(line, True, PALETTE["text"]), (x, y))
+            surface.blit(render_text(line, Size.body, Color.text), (x, y))
             y += body_font.get_linesize()
 
     def _draw_scrollbar(self, surface, vp: pygame.Rect) -> None:
@@ -150,15 +150,14 @@ class CluePanel:
         track_h = vp.h
         thumb_h = max(24, track_h * vp.h // self._content_h)
         thumb_y = vp.y + (track_h - thumb_h) * self.scroll // self.max_scroll
-        thumb = pygame.Rect(vp.right - SCROLLBAR_W - 4, thumb_y, SCROLLBAR_W, thumb_h)
-        draw_rect_alpha(surface, (*PALETTE["text_dim"][:3], 140), thumb, 3)
+        thumb = pygame.Rect(vp.right - SCROLLBAR_W - Space.xs, thumb_y, SCROLLBAR_W, thumb_h)
+        draw_rect_alpha(surface, (*Color.text_dim[:3], 140), thumb, 3)
 
     def _draw_legend(self, surface) -> None:
-        font = get_font(18)
         x = self.area.x + PAD
         y = self.area.bottom - FOOTER_H // 2
         for label, role in _LEGEND:
             pygame.draw.rect(surface, ROLE_COLOR[role], (x, y - 6, 12, 12), border_radius=3)
-            txt = font.render(label, True, PALETTE["text_dim"])
+            txt = render_text(label, Size.caption, Color.text_dim)
             surface.blit(txt, (x + 18, y - txt.get_height() // 2))
             x += 18 + txt.get_width() + 18
