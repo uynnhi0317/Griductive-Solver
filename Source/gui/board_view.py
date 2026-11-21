@@ -6,7 +6,7 @@ from .highlight import Role
 from .character_card import CharacterCard, CardModel
 from .theme import Color, Size, Space, render_text
 
-LABEL_MARGIN = 40
+LABEL_MARGIN = Space.xxl + Space.sm
 PAD = Space.xl
 
 

@@ -1,5 +1,7 @@
 """
-Design tokens của GUI. Đây là NƠI DUY NHẤT được phép chứa màu / cỡ chữ / khoảng cách thô.
+Design tokens của GUI: màu, cỡ chữ, thang khoảng cách, bo góc, độ dày nét định nghĩa ở đây.
+Hằng số hình học riêng của một component đặt tên rõ ở đầu file component đó,
+và nếu dùng số lẻ thì phải rút ra từ thang Space.
 
 + Màu đặt tên theo VAI TRÒ (surface_2, text_dim...), không theo chỗ dùng (select_card_back...)
 + Component khác chỉ import Color, Size, Space, Radius; không viết tuple RGB hay số pixel rời rạc
@@ -32,6 +34,7 @@ class Color:
     text = _hex("EDE9FF")
     text_dim = _hex("A9A2C7")
     text_disabled = _hex("6B6585")
+    scrollbar = _hex("A9A2C7", 140)
 
     # thẻ
     card_back = _hex("2F2B44")       # thẻ úp, tương phản với text ~11:1
@@ -49,6 +52,7 @@ class Color:
     role_subject = _hex("FFD84D")
     role_counted = _hex("6FE3F5")
     role_condition = _hex("D86BE0")
+    role_tint = 50
 
     # phản hồi (toast, dùng ở P2)
     fb_info = _hex("5AA9FF")
@@ -71,7 +75,10 @@ class Size:
 class Radius:
     card = 10
     control = 8
+    small = 3
 
+class Stroke:
+    thin, medium, thick = 1, 2, 3
 
 STATUS_COLOR = {
     Status.CRIMINAL: Color.criminal,

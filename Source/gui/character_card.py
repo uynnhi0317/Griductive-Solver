@@ -7,16 +7,14 @@ from game.cell import Cell
 from game.character import Character, Status
 from .highlight import Role
 from .theme import (
-    Color, Radius, Space, Size, STATUS_COLOR, ROLE_COLOR,
+    Color, Radius, Space, Size, Stroke, STATUS_COLOR, ROLE_COLOR,
     draw_rect_alpha, draw_status_icon, fit_line, fit_wrapped, get_font,
 )
 
 COMPACT_PX = 160        # thẻ nhỏ hơn ngưỡng này chỉ hiện huy hiệu + tên
 SELECT_SCALE = 1.03     # thẻ được chọn phóng to nhẹ
 SELECT_ANIM = 0.12      # giây để phóng to / thu lại
-RING_W = 3
-ROLE_INSET = 5          # viền role nằm trong vòng focus để thấy được cả hai
-ROLE_TINT_ALPHA = 50
+ROLE_OUTSET = Space.xs
 
 
 @dataclass(frozen=True)
@@ -98,7 +96,7 @@ class CharacterCard:
         """Mặt úp: tên + nghề ở giữa, có viền sáng để tách khỏi nền"""
         w, h = self.rect.size
         face = self._blank(fill)
-        pygame.draw.rect(face, Color.card_border, face.get_rect(), width=1, border_radius=self.RADIUS)
+        pygame.draw.rect(face, Color.card_border, face.get_rect(), width=Stroke.thin, border_radius=self.RADIUS)
         self._blit_centered_name_job(face, w, h)
         return face
 
@@ -212,12 +210,13 @@ class CharacterCard:
             draw_rect_alpha(surface, Color.hover_overlay, r, self.RADIUS)
 
         if selected:
-            pygame.draw.rect(surface, Color.focus, r, width=min(RING_W, max(1, w // 2)),
+            pygame.draw.rect(surface, Color.focus, r, width=min(Stroke.thick, max(1, w // 2)),
                              border_radius=self.RADIUS)
 
         if self.role is not None:
             color = ROLE_COLOR[self.role]
-            draw_rect_alpha(surface, (*color[:3], ROLE_TINT_ALPHA), r, self.RADIUS)
-            inner = r.inflate(-2 * ROLE_INSET, -2 * ROLE_INSET) if min(r.size) > 4 * ROLE_INSET else r
-            pygame.draw.rect(surface, color, inner, width=min(RING_W, max(1, w // 2)),
-                             border_radius=max(2, self.RADIUS - ROLE_INSET // 2))
+            if not front:     # thẻ ngửa giữ màu trạng thái, chỉ vẽ viền
+                draw_rect_alpha(surface, (*color[:3], Color.role_tint), r, self.RADIUS)
+            outer = r.inflate(2 * ROLE_OUTSET, 2 * ROLE_OUTSET)
+            pygame.draw.rect(surface, color, outer, width=Stroke.thick,
+                             border_radius=self.RADIUS + ROLE_OUTSET)

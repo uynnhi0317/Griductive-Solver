@@ -4,7 +4,7 @@ from game.cell import Cell
 from game.character import Status
 from game.public_state import PublicState
 from .highlight import Role
-from .theme import (Color, ROLE_COLOR, Radius, Size, Space,
+from .theme import (Color, ROLE_COLOR, Radius, Size, Space, Stroke,
                     draw_rect_alpha, draw_status_icon, get_font, render_text, wrap_text)
 
 PAD = Space.md              # lề của panel
@@ -13,6 +13,7 @@ ROW_GAP = Space.sm
 HEADER_H = 44
 FOOTER_H = 34
 ICON_R = 8
+SWATCH = 12
 SCROLLBAR_W = 6
 WHEEL_STEP = 48
 
@@ -131,7 +132,7 @@ class CluePanel:
         bg = Color.surface_3 if (selected or hovered) else Color.surface_2
         pygame.draw.rect(surface, bg, rect, border_radius=Radius.control)
         if selected:
-            pygame.draw.rect(surface, Color.focus, rect, width=2, border_radius=Radius.control)
+            pygame.draw.rect(surface, Color.focus, rect, width=Stroke.medium, border_radius=Radius.control)
 
         body_font = get_font(Size.body)
         x, y = rect.x + ROW_PAD, rect.y + ROW_PAD
@@ -151,13 +152,14 @@ class CluePanel:
         thumb_h = max(24, track_h * vp.h // self._content_h)
         thumb_y = vp.y + (track_h - thumb_h) * self.scroll // self.max_scroll
         thumb = pygame.Rect(vp.right - SCROLLBAR_W - Space.xs, thumb_y, SCROLLBAR_W, thumb_h)
-        draw_rect_alpha(surface, (*Color.text_dim[:3], 140), thumb, 3)
+        draw_rect_alpha(surface, Color.scrollbar, thumb, Radius.small)
 
     def _draw_legend(self, surface) -> None:
         x = self.area.x + PAD
         y = self.area.bottom - FOOTER_H // 2
         for label, role in _LEGEND:
-            pygame.draw.rect(surface, ROLE_COLOR[role], (x, y - 6, 12, 12), border_radius=3)
+            pygame.draw.rect(surface, ROLE_COLOR[role], (x, y - SWATCH // 2, SWATCH, SWATCH),
+                             border_radius=Radius.small)
             txt = render_text(label, Size.caption, Color.text_dim)
-            surface.blit(txt, (x + 18, y - txt.get_height() // 2))
-            x += 18 + txt.get_width() + 18
+            surface.blit(txt, (x + SWATCH + Space.sm, y - txt.get_height() // 2))
+            x += SWATCH + Space.sm + txt.get_width() + Space.lg
