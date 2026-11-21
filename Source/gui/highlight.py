@@ -1,17 +1,18 @@
 """
 Adapter: clue -> {cell: Role} để GUI biết tô ô nào bằng màu nào
 
-Không import pygame, không import loại clue cụ thể nào (kể cả clue extension chưa merge),
-nên extension mới chạy được mà không phải sửa file này.
+Không import pygame, không import loại clue cụ thể nào nên extension mới 
+chạy được mà không phải sửa file này.
 
 Cách hoạt động (theo thứ tự ưu tiên):
 1. Clue tự định nghĩa `highlight_layers(board) -> Mapping[Cell, Role]` -> dùng đúng cái đó.
    Đây là cửa dành cho clue phức tạp (vd. "2 trong 5 tội phạm quanh Karl nằm ở hàng 3"
    cần vùng đếm + vùng điều kiện + chủ thể tách riêng).
 2. Mặc định: mọi ô của `referenced_cells(board)` là COUNTED, rồi nâng cấp theo quy ước tên trường:
-   - `cell`, `a`, `b` (kiểu Cell)      -> SUBJECT   (FACT, SAME, DIFFERENT, ONE_OF_K, IF_THEN)
+   - `cell`, `a`, `b` (kiểu Cell)      -> SUBJECT   (FACT, SAME, DIFFERENT, ONE_OF_K)
    - `region.center` (vùng NEIGHBORS)  -> SUBJECT   (ô trung tâm không nằm trong vùng neighbors)
-   - `then_clue` (clue lồng nhau)      -> đệ quy    (IF_THEN)
+   - `then_clue` (clue lồng nhau)      -> IF_THEN:  cell là CONDITION (vế "nếu"), vế "thì" tô đệ 
+                                          quy như clue thường
 """
 
 from enum import Enum
@@ -64,5 +65,7 @@ def highlight_roles(clue: Clue, board: Board) -> dict[Cell, Role]:
 
     nested = getattr(clue, "then_clue", None)
     if isinstance(nested, Clue):
-        _merge(roles, highlight_roles(nested, board))
+        roles = {}
+        _add(roles, clue.cell, Role.CONDITION)             # vế "nếu"
+        _merge(roles, highlight_roles(nested, board))      # vế "thì"
     return roles
