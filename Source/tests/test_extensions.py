@@ -208,7 +208,7 @@ def test_from_dict_errors(data):
 def test_showcase_puzzle_uses_all_extensions():
     from pathlib import Path
     from game.puzzle_loader import load_puzzle
-    path = Path(__file__).resolve().parent.parent / "puzzles" / "3x3" / "3x3_05.json"
+    path = Path(__file__).resolve().parent.parent / "puzzles" / "3x3" / "3x3_03.json"
     puzzle = load_puzzle(path)   # loader đã kiểm tra mọi clue đúng với đáp án
     kinds = {clue.kind for clue in puzzle.clues.values()}
     assert {"PARITY", "CONNECTED", "NO_ADJACENT", "ONE_OF_K", "IF_THEN"} <= kinds

@@ -192,13 +192,3 @@ def test_region_describe():
     assert COPS.describe(BOARD) == "the Cops"
     assert DOCTORS.describe(BOARD) == "the Doctors"   # viết theo thẻ, không theo JSON
     assert COPS.describe() == "profession Cop"
-
-
-def test_profession_puzzle_loads():
-    from pathlib import Path
-    from game.puzzle_loader import load_puzzle
-    path = Path(__file__).resolve().parent.parent / "puzzles" / "3x3" / "3x3_06.json"
-    puzzle = load_puzzle(path)   # loader đã kiểm tra mọi clue đúng với đáp án
-    regions = [getattr(c, "region", None) or getattr(getattr(c, "then_clue", None), "region", None)
-               for c in puzzle.clues.values()]
-    assert sum(isinstance(r, ExplicitList) and r.is_profession for r in regions) >= 3

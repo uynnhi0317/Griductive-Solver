@@ -1,0 +1,332 @@
+{
+  "id": "4x4_01",
+  "title": "Quarter Precinct",
+  "description": "Introductory 4x4 case combining core clues with PARITY and ONE_OF_K extensions.",
+  "size": 4,
+  "characters": {
+    "A1": {
+      "name": "Alice",
+      "profession": "Actor"
+    },
+    "B1": {
+      "name": "Bob",
+      "profession": "Baker"
+    },
+    "C1": {
+      "name": "Cara",
+      "profession": "Chef"
+    },
+    "D1": {
+      "name": "Dan",
+      "profession": "Doctor"
+    },
+    "A2": {
+      "name": "Eve",
+      "profession": "Engineer"
+    },
+    "B2": {
+      "name": "Finn",
+      "profession": "Farmer"
+    },
+    "C2": {
+      "name": "Gina",
+      "profession": "Guard"
+    },
+    "D2": {
+      "name": "Hugo",
+      "profession": "Hunter"
+    },
+    "A3": {
+      "name": "Ivy",
+      "profession": "Interpreter"
+    },
+    "B3": {
+      "name": "Jack",
+      "profession": "Judge"
+    },
+    "C3": {
+      "name": "Kara",
+      "profession": "Keeper"
+    },
+    "D3": {
+      "name": "Liam",
+      "profession": "Lawyer"
+    },
+    "A4": {
+      "name": "Maya",
+      "profession": "Mason"
+    },
+    "B4": {
+      "name": "Noah",
+      "profession": "Nurse"
+    },
+    "C4": {
+      "name": "Olga",
+      "profession": "Optician"
+    },
+    "D4": {
+      "name": "Paul",
+      "profession": "Pilot"
+    }
+  },
+  "solution": {
+    "A1": "CRIMINAL",
+    "B1": "INNOCENT",
+    "C1": "CRIMINAL",
+    "D1": "INNOCENT",
+    "A2": "CRIMINAL",
+    "B2": "CRIMINAL",
+    "C2": "CRIMINAL",
+    "D2": "INNOCENT",
+    "A3": "INNOCENT",
+    "B3": "INNOCENT",
+    "C3": "INNOCENT",
+    "D3": "CRIMINAL",
+    "A4": "INNOCENT",
+    "B4": "CRIMINAL",
+    "C4": "INNOCENT",
+    "D4": "INNOCENT"
+  },
+  "clues": {
+    "A1": {
+      "type": "IF_THEN",
+      "cell": "C2",
+      "status": "CRIMINAL",
+      "then": {
+        "type": "PARITY",
+        "status": "INNOCENT",
+        "parity": "ODD",
+        "region": {
+          "type": "ROW",
+          "number": 4
+        }
+      }
+    },
+    "B1": {
+      "type": "IF_THEN",
+      "cell": "C1",
+      "status": "CRIMINAL",
+      "then": {
+        "type": "PARITY",
+        "status": "INNOCENT",
+        "parity": "EVEN",
+        "region": {
+          "type": "CELLS",
+          "cells": [
+            "B1",
+            "D1"
+          ]
+        }
+      }
+    },
+    "C1": {
+      "type": "ONE_OF_K",
+      "status": "CRIMINAL",
+      "cell": "C2",
+      "k": 5,
+      "region": {
+        "type": "NEIGHBORS",
+        "cell": "B1"
+      }
+    },
+    "D1": {
+      "type": "IF_THEN",
+      "cell": "C3",
+      "status": "INNOCENT",
+      "then": {
+        "type": "PARITY",
+        "status": "CRIMINAL",
+        "parity": "EVEN",
+        "region": {
+          "type": "ROW",
+          "number": 1
+        }
+      }
+    },
+    "A2": {
+      "type": "IF_THEN",
+      "cell": "D3",
+      "status": "CRIMINAL",
+      "then": {
+        "type": "ONE_OF_K",
+        "status": "CRIMINAL",
+        "cell": "C2",
+        "k": 4,
+        "region": {
+          "type": "NEIGHBORS",
+          "cell": "B3"
+        }
+      }
+    },
+    "B2": {
+      "type": "ONE_OF_K",
+      "status": "CRIMINAL",
+      "cell": "C2",
+      "k": 2,
+      "region": {
+        "type": "CELLS",
+        "cells": [
+          "C1",
+          "C2",
+          "A4"
+        ]
+      }
+    },
+    "C2": {
+      "type": "ONE_OF_K",
+      "status": "INNOCENT",
+      "cell": "C3",
+      "k": 4,
+      "region": {
+        "type": "NEIGHBORS",
+        "cell": "D3"
+      }
+    },
+    "D2": {
+      "type": "IF_THEN",
+      "cell": "D2",
+      "status": "INNOCENT",
+      "then": {
+        "type": "ONE_OF_K",
+        "status": "CRIMINAL",
+        "cell": "D3",
+        "k": 1,
+        "region": {
+          "type": "CELLS",
+          "cells": [
+            "D3",
+            "A4",
+            "C4"
+          ]
+        }
+      }
+    },
+    "A3": {
+      "type": "IF_THEN",
+      "cell": "C4",
+      "status": "INNOCENT",
+      "then": {
+        "type": "ONE_OF_K",
+        "status": "CRIMINAL",
+        "cell": "D3",
+        "k": 1,
+        "region": {
+          "type": "CELLS",
+          "cells": [
+            "D3",
+            "A4",
+            "C4"
+          ]
+        }
+      }
+    },
+    "B3": {
+      "type": "IF_THEN",
+      "cell": "A3",
+      "status": "INNOCENT",
+      "then": {
+        "type": "ONE_OF_K",
+        "status": "INNOCENT",
+        "cell": "C4",
+        "k": 2,
+        "region": {
+          "type": "CELLS",
+          "cells": [
+            "D3",
+            "A4",
+            "C4"
+          ]
+        }
+      }
+    },
+    "C3": {
+      "type": "IF_THEN",
+      "cell": "D3",
+      "status": "CRIMINAL",
+      "then": {
+        "type": "PARITY",
+        "status": "INNOCENT",
+        "parity": "EVEN",
+        "region": {
+          "type": "COLUMN",
+          "letter": "A"
+        }
+      }
+    },
+    "D3": {
+      "type": "IF_THEN",
+      "cell": "C4",
+      "status": "INNOCENT",
+      "then": {
+        "type": "PARITY",
+        "status": "INNOCENT",
+        "parity": "EVEN",
+        "region": {
+          "type": "COLUMN",
+          "letter": "A"
+        }
+      }
+    },
+    "A4": {
+      "type": "IF_THEN",
+      "cell": "B3",
+      "status": "INNOCENT",
+      "then": {
+        "type": "ONE_OF_K",
+        "status": "INNOCENT",
+        "cell": "A3",
+        "k": 4,
+        "region": {
+          "type": "NEIGHBORS",
+          "cell": "B2"
+        }
+      }
+    },
+    "B4": {
+      "type": "IF_THEN",
+      "cell": "C4",
+      "status": "INNOCENT",
+      "then": {
+        "type": "ONE_OF_K",
+        "status": "INNOCENT",
+        "cell": "A3",
+        "k": 4,
+        "region": {
+          "type": "NEIGHBORS",
+          "cell": "B2"
+        }
+      }
+    },
+    "C4": {
+      "type": "IF_THEN",
+      "cell": "B3",
+      "status": "INNOCENT",
+      "then": {
+        "type": "ONE_OF_K",
+        "status": "INNOCENT",
+        "cell": "B3",
+        "k": 2,
+        "region": {
+          "type": "CELLS",
+          "cells": [
+            "D1",
+            "B3"
+          ]
+        }
+      }
+    },
+    "D4": {
+      "type": "PARITY",
+      "status": "CRIMINAL",
+      "parity": "ODD",
+      "region": {
+        "type": "NEIGHBORS",
+        "cell": "C2"
+      }
+    }
+  },
+  "initially_revealed": [
+    "B2",
+    "C3"
+  ]
+}

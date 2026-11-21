@@ -1,0 +1,251 @@
+{
+  "id": "4x4_05",
+  "title": "Lone Witness",
+  "description": "Deep synthesis 4x4 puzzle starting from a single face-up card and employing all five extensions plus profession groups.",
+  "size": 4,
+  "characters": {
+    "A1": {
+      "name": "Alice",
+      "profession": "Chef"
+    },
+    "B1": {
+      "name": "Bob",
+      "profession": "Cop"
+    },
+    "C1": {
+      "name": "Cara",
+      "profession": "Chef"
+    },
+    "D1": {
+      "name": "Dan",
+      "profession": "Engineer"
+    },
+    "A2": {
+      "name": "Eve",
+      "profession": "Pilot"
+    },
+    "B2": {
+      "name": "Finn",
+      "profession": "Cop"
+    },
+    "C2": {
+      "name": "Gina",
+      "profession": "Cop"
+    },
+    "D2": {
+      "name": "Hugo",
+      "profession": "Guard"
+    },
+    "A3": {
+      "name": "Ivy",
+      "profession": "Chef"
+    },
+    "B3": {
+      "name": "Jack",
+      "profession": "Engineer"
+    },
+    "C3": {
+      "name": "Kara",
+      "profession": "Guard"
+    },
+    "D3": {
+      "name": "Liam",
+      "profession": "Guard"
+    },
+    "A4": {
+      "name": "Maya",
+      "profession": "Doctor"
+    },
+    "B4": {
+      "name": "Noah",
+      "profession": "Pilot"
+    },
+    "C4": {
+      "name": "Olga",
+      "profession": "Doctor"
+    },
+    "D4": {
+      "name": "Paul",
+      "profession": "Doctor"
+    }
+  },
+  "solution": {
+    "A1": "CRIMINAL",
+    "B1": "INNOCENT",
+    "C1": "INNOCENT",
+    "D1": "INNOCENT",
+    "A2": "CRIMINAL",
+    "B2": "CRIMINAL",
+    "C2": "INNOCENT",
+    "D2": "INNOCENT",
+    "A3": "CRIMINAL",
+    "B3": "INNOCENT",
+    "C3": "CRIMINAL",
+    "D3": "CRIMINAL",
+    "A4": "INNOCENT",
+    "B4": "INNOCENT",
+    "C4": "CRIMINAL",
+    "D4": "INNOCENT"
+  },
+  "clues": {
+    "A1": {
+      "type": "ONE_OF_K",
+      "status": "CRIMINAL",
+      "cell": "C4",
+      "k": 1,
+      "region": {
+        "type": "CELLS",
+        "profession": "Doctor"
+      }
+    },
+    "B1": {
+      "type": "ONE_OF_K",
+      "status": "CRIMINAL",
+      "cell": "D3",
+      "k": 2,
+      "region": {
+        "type": "CELLS",
+        "profession": "Guard"
+      }
+    },
+    "C1": {
+      "type": "ONE_OF_K",
+      "status": "INNOCENT",
+      "cell": "B1",
+      "k": 2,
+      "region": {
+        "type": "CELLS",
+        "profession": "Cop"
+      }
+    },
+    "D1": {
+      "type": "ONE_OF_K",
+      "status": "INNOCENT",
+      "cell": "C1",
+      "k": 1,
+      "region": {
+        "type": "CELLS",
+        "profession": "Chef"
+      }
+    },
+    "A2": {
+      "type": "NO_ADJACENT",
+      "status": "CRIMINAL",
+      "region": {
+        "type": "CELLS",
+        "cells": [
+          "B1",
+          "A2",
+          "B3"
+        ]
+      }
+    },
+    "B2": {
+      "type": "ONE_OF_K",
+      "status": "CRIMINAL",
+      "cell": "B2",
+      "k": 1,
+      "region": {
+        "type": "CELLS",
+        "profession": "Cop"
+      }
+    },
+    "C2": {
+      "type": "PARITY",
+      "status": "INNOCENT",
+      "parity": "ODD",
+      "region": {
+        "type": "CELLS",
+        "profession": "Guard"
+      }
+    },
+    "D2": {
+      "type": "CONNECTED",
+      "status": "CRIMINAL",
+      "region": {
+        "type": "ROW",
+        "number": 2
+      }
+    },
+    "A3": {
+      "type": "PARITY",
+      "status": "INNOCENT",
+      "parity": "EVEN",
+      "region": {
+        "type": "CELLS",
+        "profession": "Doctor"
+      }
+    },
+    "B3": {
+      "type": "PARITY",
+      "status": "INNOCENT",
+      "parity": "EVEN",
+      "region": {
+        "type": "CELLS",
+        "profession": "Engineer"
+      }
+    },
+    "C3": {
+      "type": "PARITY",
+      "status": "CRIMINAL",
+      "parity": "EVEN",
+      "region": {
+        "type": "CELLS",
+        "profession": "Chef"
+      }
+    },
+    "D3": {
+      "type": "IF_THEN",
+      "cell": "D3",
+      "status": "CRIMINAL",
+      "then": {
+        "type": "ONE_OF_K",
+        "status": "INNOCENT",
+        "cell": "D2",
+        "k": 2,
+        "region": {
+          "type": "ROW",
+          "number": 2
+        }
+      }
+    },
+    "A4": {
+      "type": "ONE_OF_K",
+      "status": "INNOCENT",
+      "cell": "B4",
+      "k": 1,
+      "region": {
+        "type": "CELLS",
+        "profession": "Pilot"
+      }
+    },
+    "B4": {
+      "type": "PARITY",
+      "status": "CRIMINAL",
+      "parity": "EVEN",
+      "region": {
+        "type": "CELLS",
+        "profession": "Guard"
+      }
+    },
+    "C4": {
+      "type": "NO_ADJACENT",
+      "status": "CRIMINAL",
+      "region": {
+        "type": "CELLS",
+        "profession": "Cop"
+      }
+    },
+    "D4": {
+      "type": "NO_ADJACENT",
+      "status": "CRIMINAL",
+      "region": {
+        "type": "CELLS",
+        "profession": "Doctor"
+      }
+    }
+  },
+  "initially_revealed": [
+    "B2"
+  ]
+}

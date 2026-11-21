@@ -1,0 +1,265 @@
+{
+  "id": "4x4_04",
+  "title": "Parity Crossfire",
+  "description": "High-density 4x4 benchmark with overlapping PARITY and EXACTLY constraints generating extra auxiliary variables.",
+  "size": 4,
+  "characters": {
+    "A1": {
+      "name": "Alice",
+      "profession": "Chef"
+    },
+    "B1": {
+      "name": "Bob",
+      "profession": "Engineer"
+    },
+    "C1": {
+      "name": "Cara",
+      "profession": "Pilot"
+    },
+    "D1": {
+      "name": "Dan",
+      "profession": "Guard"
+    },
+    "A2": {
+      "name": "Eve",
+      "profession": "Engineer"
+    },
+    "B2": {
+      "name": "Finn",
+      "profession": "Guard"
+    },
+    "C2": {
+      "name": "Gina",
+      "profession": "Cop"
+    },
+    "D2": {
+      "name": "Hugo",
+      "profession": "Pilot"
+    },
+    "A3": {
+      "name": "Ivy",
+      "profession": "Doctor"
+    },
+    "B3": {
+      "name": "Jack",
+      "profession": "Cop"
+    },
+    "C3": {
+      "name": "Kara",
+      "profession": "Guard"
+    },
+    "D3": {
+      "name": "Liam",
+      "profession": "Chef"
+    },
+    "A4": {
+      "name": "Maya",
+      "profession": "Chef"
+    },
+    "B4": {
+      "name": "Noah",
+      "profession": "Doctor"
+    },
+    "C4": {
+      "name": "Olga",
+      "profession": "Doctor"
+    },
+    "D4": {
+      "name": "Paul",
+      "profession": "Cop"
+    }
+  },
+  "solution": {
+    "A1": "INNOCENT",
+    "B1": "CRIMINAL",
+    "C1": "CRIMINAL",
+    "D1": "INNOCENT",
+    "A2": "INNOCENT",
+    "B2": "CRIMINAL",
+    "C2": "INNOCENT",
+    "D2": "CRIMINAL",
+    "A3": "CRIMINAL",
+    "B3": "INNOCENT",
+    "C3": "CRIMINAL",
+    "D3": "INNOCENT",
+    "A4": "INNOCENT",
+    "B4": "INNOCENT",
+    "C4": "CRIMINAL",
+    "D4": "CRIMINAL"
+  },
+  "clues": {
+    "A1": {
+      "type": "IF_THEN",
+      "cell": "A1",
+      "status": "INNOCENT",
+      "then": {
+        "type": "PARITY",
+        "status": "INNOCENT",
+        "parity": "EVEN",
+        "region": {
+          "type": "CELLS",
+          "cells": [
+            "C2",
+            "B3"
+          ]
+        }
+      }
+    },
+    "B1": {
+      "type": "PARITY",
+      "status": "CRIMINAL",
+      "parity": "EVEN",
+      "region": {
+        "type": "CELLS",
+        "profession": "Pilot"
+      }
+    },
+    "C1": {
+      "type": "IF_THEN",
+      "cell": "B4",
+      "status": "INNOCENT",
+      "then": {
+        "type": "PARITY",
+        "status": "CRIMINAL",
+        "parity": "EVEN",
+        "region": {
+          "type": "ROW",
+          "number": 1
+        }
+      }
+    },
+    "D1": {
+      "type": "EXACTLY",
+      "k": 2,
+      "region": {
+        "type": "CELLS",
+        "profession": "Guard"
+      }
+    },
+    "A2": {
+      "type": "IF_THEN",
+      "cell": "A2",
+      "status": "INNOCENT",
+      "then": {
+        "type": "PARITY",
+        "status": "CRIMINAL",
+        "parity": "EVEN",
+        "region": {
+          "type": "ROW",
+          "number": 1
+        }
+      }
+    },
+    "B2": {
+      "type": "EXACTLY",
+      "k": 0,
+      "region": {
+        "type": "CELLS",
+        "profession": "Chef"
+      }
+    },
+    "C2": {
+      "type": "PARITY",
+      "status": "CRIMINAL",
+      "parity": "ODD",
+      "region": {
+        "type": "CELLS",
+        "profession": "Engineer"
+      }
+    },
+    "D2": {
+      "type": "PARITY",
+      "status": "INNOCENT",
+      "parity": "EVEN",
+      "region": {
+        "type": "CELLS",
+        "profession": "Pilot"
+      }
+    },
+    "A3": {
+      "type": "EXACTLY",
+      "k": 2,
+      "region": {
+        "type": "CELLS",
+        "profession": "Pilot"
+      }
+    },
+    "B3": {
+      "type": "EXACTLY",
+      "k": 1,
+      "region": {
+        "type": "CELLS",
+        "profession": "Cop"
+      }
+    },
+    "C3": {
+      "type": "IF_THEN",
+      "cell": "C3",
+      "status": "CRIMINAL",
+      "then": {
+        "type": "PARITY",
+        "status": "CRIMINAL",
+        "parity": "EVEN",
+        "region": {
+          "type": "ROW",
+          "number": 3
+        }
+      }
+    },
+    "D3": {
+      "type": "CONNECTED",
+      "status": "CRIMINAL",
+      "region": {
+        "type": "ROW",
+        "number": 4
+      }
+    },
+    "A4": {
+      "type": "PARITY",
+      "status": "CRIMINAL",
+      "parity": "EVEN",
+      "region": {
+        "type": "CELLS",
+        "profession": "Doctor"
+      }
+    },
+    "B4": {
+      "type": "PARITY",
+      "status": "INNOCENT",
+      "parity": "ODD",
+      "region": {
+        "type": "CELLS",
+        "profession": "Chef"
+      }
+    },
+    "C4": {
+      "type": "PARITY",
+      "status": "CRIMINAL",
+      "parity": "ODD",
+      "region": {
+        "type": "CELLS",
+        "profession": "Cop"
+      }
+    },
+    "D4": {
+      "type": "IF_THEN",
+      "cell": "A1",
+      "status": "INNOCENT",
+      "then": {
+        "type": "EXACTLY",
+        "k": 0,
+        "region": {
+          "type": "CELLS",
+          "cells": [
+            "D1",
+            "B3"
+          ]
+        }
+      }
+    }
+  },
+  "initially_revealed": [
+    "B2",
+    "C2"
+  ]
+}
