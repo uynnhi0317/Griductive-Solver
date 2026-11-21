@@ -11,7 +11,7 @@ PAD = Space.xl
 
 
 class BoardView:
-    def __init__(self, state: PublicState, area: pygame.Rect, gap: int = Space.sm):
+    def __init__(self, state: PublicState, area: pygame.Rect, gap: int = Space.lg):
         self.n = state.board.size
         self.gap = gap
         self._compute_layout(area)
