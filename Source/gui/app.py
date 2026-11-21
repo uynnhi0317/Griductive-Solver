@@ -13,6 +13,7 @@ RESCALE_WINDOW = 0.8
 MARGIN = 16
 PANEL_FRAC = 0.30
 PANEL_MIN_W = 300
+MIN_WINDOW = (960, 600)
 
 class App:
     def __init__(self) -> None:
@@ -83,6 +84,9 @@ class App:
         if e.type == pygame.QUIT:
             self.running = False
         elif e.type == pygame.VIDEORESIZE:
+            w, h = max(e.w, MIN_WINDOW[0]), max(e.h, MIN_WINDOW[1])
+            if (w, h) != (e.w, e.h):     # pygame không có min size gốc
+                self.screen = pygame.display.set_mode((w, h), pygame.RESIZABLE)
             board_area, panel_area = self._layout()
             self.board.fit(board_area)
             self.panel.fit(panel_area)

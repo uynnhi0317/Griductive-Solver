@@ -11,6 +11,7 @@ from .theme import (
     draw_rect_alpha, draw_status_icon, fit_font, fit_wrapped, get_font,
 )
 
+COMPACT_PX = 160        # thẻ nhỏ hơn ngưỡng này chỉ hiện huy hiệu + tên
 SELECT_SCALE = 1.03     # thẻ được chọn phóng to nhẹ
 SELECT_ANIM = 0.12      # giây để phóng to / thu lại
 RING_W = 3
@@ -116,6 +117,12 @@ class CharacterCard:
 
         badge_r = max(8, h // 14)
         draw_status_icon(face, m.status, w - Space.md - badge_r, Space.md + badge_r, badge_r)
+
+        if min(w, h) < COMPACT_PX:
+            font = fit_font(m.character.name, h // 4, w - 2 * Space.md, bold=True)
+            txt = font.render(m.character.name, True, Color.text)
+            face.blit(txt, txt.get_rect(center=(w // 2, h // 2)))
+            return face
 
         if m.clue_text is None:
             self._blit_centered_name_job(face, w, h)

@@ -139,7 +139,15 @@ def fit_wrapped(text: str, max_width: int, max_height: int, max_size: int, min_s
         if len(lines) * font.get_linesize() <= max_height and all(font.size(l)[0] <= max_width for l in lines):
             return font, lines
     font = get_font(min_size)
-    return font, wrap_text(text, font, max_width)
+    lines = wrap_text(text, font, max_width)
+    max_lines = max(1, max_height // font.get_linesize())
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        last = lines[-1]
+        while last and font.size(last + "...")[0] > max_width:
+            last = last[:-1]
+        lines[-1] = last.rstrip() + "..."
+    return font, lines
 
 
 # ---------------------------------------------------------------- drawing
