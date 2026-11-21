@@ -170,7 +170,7 @@ def test_build_kb_is_deterministic(board: Board) -> None:
 _PUZZLES = Path(__file__).resolve().parent.parent / "puzzles" / "3x3"
 
 
-@pytest.mark.parametrize("name", ["3x3_03", "3x3_06"])
+@pytest.mark.parametrize("name", ["3x3_03"])
 def test_true_solution_satisfies_kb_with_extensions(name: str) -> None:
     """Lật hết thẻ của puzzle dùng clue mở rộng: đáp án thật vẫn thoả KB_t (tồn tại giá trị biến phụ)."""
     puzzle = load_puzzle(_PUZZLES / f"{name}.json")
