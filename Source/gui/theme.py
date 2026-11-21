@@ -65,6 +65,7 @@ class Space:
 class Size:
     """Thang cỡ chữ (pixel, dùng với font TTF)"""
     caption, body, h2, title = 14, 18, 22, 28
+    min_text = 10
 
 
 class Radius:
@@ -108,11 +109,23 @@ def render_text(text: str, size: int, color: tuple, bold: bool = False) -> pygam
     return get_font(size, bold).render(text, True, color)
 
 
-def fit_font(text: str, max_size: int, max_width: int, bold: bool = False) -> pygame.font.Font:
-    size = max(8, max_size)
-    while size > 8 and get_font(size, bold).size(text)[0] > max_width:
+def ellipsize(text: str, font: pygame.font.Font, max_width: int) -> str:
+    """Cắt cuối chuỗi và thêm '...' cho vừa max_width (giữ nguyên nếu đã vừa)"""
+    if font.size(text)[0] <= max_width:
+        return text
+    while text and font.size(text + "...")[0] > max_width:
+        text = text[:-1]
+    return text.rstrip() + "..."
+
+
+def fit_line(text: str, max_size: int, max_width: int, bold: bool = False,
+             min_size: int = Size.min_text) -> tuple[pygame.font.Font, str]:
+    """Một dòng: co cỡ chữ tới min_size, vẫn không vừa thì cắt bằng '...'. Trả về (font, text)"""
+    size = max(min_size, max_size)
+    while size > min_size and get_font(size, bold).size(text)[0] > max_width:
         size -= 1
-    return get_font(size, bold)
+    font = get_font(size, bold)
+    return font, ellipsize(text, font, max_width)
 
 
 def wrap_text(text: str, font: pygame.font.Font, max_width: int) -> list[str]:
@@ -132,7 +145,7 @@ def wrap_text(text: str, font: pygame.font.Font, max_width: int) -> list[str]:
 
 
 def fit_wrapped(text: str, max_width: int, max_height: int, max_size: int, min_size: int = 10):
-    """Chọn cỡ chữ lớn nhất để đoạn text ngắt dòng vừa khung; trả về (font, các dòng)"""
+    """Chọn cỡ chữ lớn nhất để đoạn text ngắt dòng vừa khung; trả về (font, các dòng), không đủ dòng thì ngắt bằng '...' """
     for size in range(max(max_size, min_size), min_size - 1, -1):
         font = get_font(size)
         lines = wrap_text(text, font, max_width)

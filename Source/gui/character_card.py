@@ -7,8 +7,8 @@ from game.cell import Cell
 from game.character import Character, Status
 from .highlight import Role
 from .theme import (
-    Color, Radius, Space, STATUS_COLOR, ROLE_COLOR,
-    draw_rect_alpha, draw_status_icon, fit_font, fit_wrapped, get_font,
+    Color, Radius, Space, Size, STATUS_COLOR, ROLE_COLOR,
+    draw_rect_alpha, draw_status_icon, fit_line, fit_wrapped, get_font,
 )
 
 COMPACT_PX = 160        # thẻ nhỏ hơn ngưỡng này chỉ hiện huy hiệu + tên
@@ -104,8 +104,11 @@ class CharacterCard:
 
     def _blit_centered_name_job(self, face: pygame.Surface, w: int, h: int) -> None:
         ch = self.model.character
-        name = fit_font(ch.name, h // 5, w - 2 * Space.md, bold=True).render(ch.name, True, Color.text)
-        job = fit_font(ch.profession, h // 7, w - 2 * Space.md).render(ch.profession, True, Color.text_dim)
+        max_w = w - 2 * Space.md
+        font, text = fit_line(ch.name, h // 5, max_w, bold=True)
+        name = font.render(text, True, Color.text)
+        font, text = fit_line(ch.profession, h // 7, max_w)
+        job = font.render(text, True, Color.text_dim)
         face.blit(name, name.get_rect(center=(w // 2, h * 2 // 5)))
         face.blit(job, job.get_rect(center=(w // 2, h * 3 // 5)))
 
@@ -119,8 +122,8 @@ class CharacterCard:
         draw_status_icon(face, m.status, w - Space.md - badge_r, Space.md + badge_r, badge_r)
 
         if min(w, h) < COMPACT_PX:
-            font = fit_font(m.character.name, h // 4, w - 2 * Space.md, bold=True)
-            txt = font.render(m.character.name, True, Color.text)
+            font, text = fit_line(m.character.name, h // 4, w - 2 * Space.md, bold=True)
+            txt = font.render(text, True, Color.text)
             face.blit(txt, txt.get_rect(center=(w // 2, h // 2)))
             return face
 
@@ -139,23 +142,41 @@ class CharacterCard:
             face.set_clip(None)
 
         label = f"is {m.status.value}"
-        txt = fit_font(label, h // 11, w - 2 * Space.md, bold=True).render(label, True, Color.text)
+        font, text = fit_line(label, h // 11, w - 2 * Space.md, bold=True)
+        txt = font.render(text, True, Color.text)
         face.blit(txt, txt.get_rect(center=(w // 2, h * 92 // 100)))
         return face
 
     def _blit_header(self, face: pygame.Surface, w: int, h: int, badge_r: int) -> None:
-        """Tên (đậm) và nghề trên MỘT dòng, chừa chỗ đối xứng cho huy hiệu để chữ vẫn canh giữa"""
+        """
+        Tên (đậm) và nghề trên MỘT dòng, chừa chỗ đối xứng cho huy hiệu để chữ vẫn canh giữa.
+        Không vừa ở cỡ caption thì không in nghề, tên tự to lại (cắt '...' nếu vẫn dài).
+        """
         ch = self.model.character
         margin = 2 * badge_r + Space.md + Space.sm
         max_w = w - 2 * margin
         gap = Space.sm
-        size = max(10, h // 11)
+        start = max(Size.caption, h // 11)
+        size = start
+        can_show_job = True
         while True:
             name_font, job_font = get_font(size, True), get_font(size)
             total = name_font.size(ch.name)[0] + gap + job_font.size(ch.profession)[0]
-            if total <= max_w or size <= 10:
+            if total <= max_w:
                 break
-            size -= 1
+            if size > Size.caption:
+                size -= 1
+            else:
+                can_show_job = False
+                break
+
+        cy = Space.md + badge_r
+        if not can_show_job:
+            name_font, text = fit_line(ch.name, start, max_w, bold=True)   # bỏ nghề thì tên to lại
+            name = name_font.render(text, True, Color.text)
+            face.blit(name, name.get_rect(center=(w // 2, cy)))
+            return
+        
         name = name_font.render(ch.name, True, Color.text)
         job = job_font.render(ch.profession, True, Color.text)
         x = (w - (name.get_width() + gap + job.get_width())) // 2
