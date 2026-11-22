@@ -33,7 +33,7 @@ from game.character import Status
 from game.public_state import PublicState
 from logic.cnf import CNF
 from logic.kb_builder import KnowledgeBase, build_kb
-from solver.dpll import solve
+from solver.dpll import SolverTimeout, solve
 from solver.stats import SolverStats
 
 
@@ -136,6 +136,36 @@ class EntailmentReport:
         return next((r for r in self.results.values() if r.verdict.is_forced), None)
 
 
+class EntailmentTimeout(SolverTimeout):
+    """
+    SolverTimeout kèm các truy vấn đã chạy xong trước khi hết giờ
+    + completed: các truy vấn hoàn tất, theo thứ tự chạy
+    + stats (kế thừa): số liệu của riêng truy vấn bị timeout
+    """
+
+    def __init__(self, stats: SolverStats, completed: tuple[SatQuery, ...] = ()) -> None:
+        super().__init__(stats)
+        self.completed = completed
+
+    @classmethod
+    def wrap(cls, exc: SolverTimeout, before: tuple[SatQuery, ...] = ()) -> "EntailmentTimeout":
+        """Thêm các truy vấn chạy trước vào đầu danh sách completed"""
+        return cls(exc.stats, before + getattr(exc, "completed", ()))
+
+    @property
+    def num_queries(self) -> int:
+        """Số lần gọi solver, gồm cả truy vấn bị timeout"""
+        return len(self.completed) + 1
+
+    def total_stats(self) -> SolverStats:
+        """Cộng dồn số liệu của mọi truy vấn, gồm cả truy vấn bị timeout"""
+        total = SolverStats()
+        for q in self.completed:
+            total.merge(q.stats)
+        total.merge(self.stats)
+        return total
+
+
 def _query(cnf: CNF, num_vars: int, assumption: int | None, label: str,
            time_limit: float | None) -> SatQuery:
     """Gọi solver một lần; SolverTimeout được để nguyên cho tầng trên xử lý"""
@@ -170,7 +200,10 @@ def classify_var(
     skipped = 0
 
     def ask(assumption: int | None, label: str) -> SatQuery:
-        q = _query(cnf, n, assumption, label, time_limit)
+        try:
+            q = _query(cnf, n, assumption, label, time_limit)
+        except SolverTimeout as exc:
+            raise EntailmentTimeout.wrap(exc, tuple(queries)) from exc
         queries.append(q)
         if pool is not None:
             pool.add(q.model)
@@ -229,7 +262,10 @@ class EntailmentChecker:
     def consistency_query(self) -> SatQuery:
         """Truy vấn KB_t"""
         if self._consistency is None:
-            self._consistency = _query(self._kb.cnf, self._kb.num_vars, None, "KB", self._time_limit)
+            try:
+                self._consistency = _query(self._kb.cnf, self._kb.num_vars, None, "KB", self._time_limit)
+            except SolverTimeout as exc:
+                raise EntailmentTimeout.wrap(exc) from exc
             if self._pool is not None:
                 self._pool.add(self._consistency.model)
         return self._consistency
@@ -257,7 +293,14 @@ class EntailmentChecker:
     def classify_all(self) -> EntailmentReport:
         """Phân loại mọi ô chưa giải theo row-major"""
         consistency = self.consistency_query()
-        results = {cell: self.classify(cell) for cell in self._state.unsolved_cells()}
+        results: dict[Cell, CellClassification] = {}
+        done: list[SatQuery] = [consistency]
+        for cell in self._state.unsolved_cells():
+            try:
+                results[cell] = self.classify(cell)
+            except EntailmentTimeout as exc:
+                raise EntailmentTimeout.wrap(exc, tuple(done)) from exc
+            done.extend(results[cell].queries)
 
         total = SolverStats()
         total.merge(consistency.stats)

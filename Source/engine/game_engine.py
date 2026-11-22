@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-from agent.entailment import CellClassification, EntailmentChecker, SatQuery, Verdict
+from agent.entailment import CellClassification, EntailmentChecker, EntailmentTimeout, SatQuery, Verdict
 from game.board import Board
 from game.cell import Cell
 from game.character import Status
@@ -139,7 +139,10 @@ class GameEngine:
         self._check_submission(cell, status)
 
         checker, consistency = self._entailment()
-        classification = checker.classify(cell)
+        try:
+            classification = checker.classify(cell)
+        except EntailmentTimeout as exc:
+            raise EntailmentTimeout.wrap(exc, () if consistency is None else (consistency,)) from exc
         outcome = _decide(classification.verdict, status)
 
         revealed = None
