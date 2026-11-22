@@ -10,6 +10,7 @@ và nếu dùng số lẻ thì phải rút ra từ thang Space.
 
 import functools
 from pathlib import Path
+from enum import Enum
 
 import pygame
 
@@ -79,6 +80,21 @@ class Radius:
 
 class Stroke:
     thin, medium, thick = 1, 2, 3
+
+class Level(Enum):
+    """Mức độ của thông báo trên thanh trạng thái / toast"""
+    INFO = "info"
+    WARN = "warn"
+    ERROR = "error"
+    OK = "ok"
+
+
+LEVEL_COLOR = {
+    Level.INFO: Color.fb_info,
+    Level.WARN: Color.fb_warn,
+    Level.ERROR: Color.fb_error,
+    Level.OK: Color.fb_ok,
+}
 
 STATUS_COLOR = {
     Status.CRIMINAL: Color.criminal,

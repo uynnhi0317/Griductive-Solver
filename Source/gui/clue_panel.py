@@ -1,8 +1,10 @@
 import pygame
+from typing import Callable
 from dataclasses import dataclass
 from game.cell import Cell
 from game.character import Status
 from game.public_state import PublicState
+from .component import Component
 from .highlight import Role
 from .theme import (Color, ROLE_COLOR, Radius, Size, Space, Stroke,
                     draw_rect_alpha, draw_status_icon, get_font, render_text, wrap_text)
@@ -31,11 +33,13 @@ class _Row:
     height: int = 0
 
 
-class CluePanel:
+class CluePanel(Component):
     """Danh sách clue đã lộ. Panel chỉ biết text (describe) nên clue extension tự hiển thị được."""
 
-    def __init__(self, state: PublicState, area: pygame.Rect):
+    def __init__(self, state: PublicState, area: pygame.Rect,
+                 on_select: Callable[[Cell], None] | None = None):
         self.area = pygame.Rect(area)
+        self._on_select = on_select or (lambda cell: None)
         self.selected: Cell | None = None
         self.hover_pos: tuple[int, int] | None = None
         self.scroll = 0
@@ -82,6 +86,20 @@ class CluePanel:
         self._layout()
         if grew:
             self.scroll = self.max_scroll
+
+    def handle_event(self, e: pygame.event.Event) -> bool:
+        if e.type == pygame.MOUSEMOTION:
+            self.hover_pos = e.pos
+        elif e.type == pygame.MOUSEWHEEL:
+            if self.area.collidepoint(pygame.mouse.get_pos()):
+                self.on_wheel(e.y)
+                return True
+        elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1 and self.area.collidepoint(e.pos):
+            cell = self.row_at_pixel(e.pos)
+            if cell is not None:
+                self._on_select(cell)
+            return True
+        return False
 
     def scroll_by(self, dy: int) -> None:
         self.scroll = max(0, min(self.scroll + dy, self.max_scroll))

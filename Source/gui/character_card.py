@@ -12,6 +12,8 @@ from .theme import (
 )
 
 COMPACT_PX = 160        # thẻ nhỏ hơn ngưỡng này chỉ hiện huy hiệu + tên
+SHAKE_DUR = 0.35
+SHAKE_WAVES = 3
 SELECT_SCALE = 1.03     # thẻ được chọn phóng to nhẹ
 SELECT_ANIM = 0.12      # giây để phóng to / thu lại
 ROLE_OUTSET = Space.xs
@@ -45,6 +47,7 @@ class CharacterCard:
         self.flip_t = 1.0 if model.face_up else 0.0          # 0.0 = face-down, 1.0 = face-up
         self._target = self.flip_t
         self.sel_t = 0.0                                     # 0.0 = bình thường, 1.0 = đã phóng to
+        self._shake_left = 0.0
         self._sel_target = False
         self.role: Role | None = None                        # vai trò highlight của clue đang chọn
         self._set_model(model)
@@ -72,7 +75,19 @@ class CharacterCard:
         if resized:
             self._set_model(self.model)    # re-render faces at the new size
 
+    def shake(self) -> None:
+        """Rung ngang khi verdict bị từ chối"""
+        self._shake_left = SHAKE_DUR
+
+    def _shake_offset(self) -> int:
+        if self._shake_left <= 0:
+            return 0
+        t = 1.0 - self._shake_left / SHAKE_DUR
+        amplitude = max(3.0, self.rect.w * 0.04)
+        return round(amplitude * math.sin(2 * math.pi * SHAKE_WAVES * t) * (1.0 - t))
+
     def update(self, dt: float, duration: float = 0.5) -> None:
+        self._shake_left = max(0.0, self._shake_left - dt)
         step = dt / duration
         if self.flip_t < self._target:
             self.flip_t = min(self._target, self.flip_t + step)
@@ -203,7 +218,7 @@ class CharacterCard:
         w = max(1, int(self.rect.w * abs(math.cos(math.pi * self.flip_t)) * scale))
         h = max(1, int(self.rect.h * scale))
         img = face if (w, h) == face.get_size() else pygame.transform.smoothscale(face, (w, h))
-        r = img.get_rect(center=self.rect.center)
+        r = img.get_rect(center=(self.rect.centerx + self._shake_offset(), self.rect.centery))
         surface.blit(img, r)
 
         if hovered and front:
