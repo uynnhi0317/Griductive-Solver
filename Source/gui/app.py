@@ -1,6 +1,5 @@
 import pygame
 from pathlib import Path
-from agent.entailment import EntailmentTimeout  # noqa: F401  (EntailmentTimeout là con của SolverTimeout)
 from engine.game_engine import EngineInvariantError, GameEngine, VerdictOutcome, VerdictResult
 from game.cell import Cell
 from game.character import Status
@@ -10,6 +9,7 @@ from solver.dpll import SolverTimeout
 from .board_view import BoardView
 from .chrome import ActionBar, StatusBar, TopBar
 from .clue_panel import CluePanel
+from .dialogs import DialogUnavailable, ask_puzzle_path
 from .highlight import highlight_roles
 from .layout import MIN_WINDOW, compute_layout
 from .theme import Color, Level
@@ -17,6 +17,8 @@ from .widgets import ToastManager
 
 PUZZLE_ROOT = Path(__file__).resolve().parent.parent / "puzzles"
 RESCALE_WINDOW = 0.8
+FPS = 60
+MAX_FRAME_DT = 0.1       # chặn dt khi một frame bị treo (hộp thoại Load, SAT query chậm) để animation không nhảy vọt
 SAT_TIME_LIMIT = 10.0     # giây cho mỗi SAT query; solver chạy trên luồng UI nên giới hạn này cũng là thời gian treo tối đa
 DEFAULT_STATUS = "Select a card (click or arrow keys), then press C for Criminal or I for Innocent."
 
@@ -30,7 +32,8 @@ class App:
     GUI chỉ thấy PublicState (engine.state), không bao giờ chạm tới PuzzleFull / đáp án ẩn.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, puzzle_root: Path = PUZZLE_ROOT) -> None:
+        self.puzzle_root = Path(puzzle_root)
         pygame.init()
         pygame.display.set_caption("Griductive Solver")
         info = pygame.display.Info()
@@ -49,13 +52,13 @@ class App:
             on_hint=lambda: self._stub("Hint"),
             on_auto_solve=lambda: self._stub("Auto Solve"),
             on_restart=self._restart,
-            on_load=lambda: self._stub("Load"),
+            on_load=self._load,
         )
 
-        self.stages = discover_puzzles(PUZZLE_ROOT)
+        self.stages = discover_puzzles(self.puzzle_root)
         if not self.stages:
-            raise SystemExit(f"Không tìm thấy câu đố trong {PUZZLE_ROOT}")
-        self.stage_index = 0
+            raise SystemExit(f"Không tìm thấy câu đố trong {self.puzzle_root}")
+        self.stage_index: int | None = 0   # None khi đang chơi một file nạp từ ngoài danh sách màn
         self.engine: GameEngine | None = None
         self.selected: Cell | None = None   # ô đang chọn; nếu thẻ đã lật thì clue của nó là clue đang chọn
         if not any(self._load_stage(i) for i in range(len(self.stages))):
@@ -87,14 +90,17 @@ class App:
 
     def _load_stage(self, index: int) -> bool:
         index %= len(self.stages)
-        path = self.stages[index]
+        return self._open_puzzle(self.stages[index], index)
+
+    def _open_puzzle(self, path: Path, stage_index: int | None) -> bool:
+        """Nạp puzzle từ file; thất bại thì giữ nguyên ván đang chơi. stage_index None = file ngoài danh sách"""
         try:
             engine = GameEngine.from_file(path, time_limit=SAT_TIME_LIMIT)
         except (PuzzleFormatError, OSError) as exc:
             print(f"[App] Không tải được puzzle {path.name}: {exc}")
             return False
         self.engine = engine
-        self.stage_index = index
+        self.stage_index = stage_index
         self.selected = None
         self.board = BoardView(engine.state, self.layout.board,
                                on_select=lambda cell: self._select(cell, toggle=True))
@@ -119,7 +125,7 @@ class App:
         sat_calls = sum(r.sat_queries for r in self.engine.history)
         self.topbar.set_info(
             self.engine.title or self.engine.puzzle_id,
-            f"Stage {self.stage_index + 1}/{len(self.stages)}",
+            "Custom file" if self.stage_index is None else f"Stage {self.stage_index + 1}/{len(self.stages)}",
             f"Revealed {len(self.state.cards)}/{total}   SAT calls {sat_calls}",
         )
         self.actionbar.set_verdict_enabled(self._can_call())
@@ -129,12 +135,31 @@ class App:
 
     # ______________________________________________________________actions
     def _nav(self, delta: int) -> None:
-        target = (self.stage_index + delta) % len(self.stages)
+        if self.stage_index is None:        # đang ở file ngoài danh sách: tiến thì vào màn đầu, lùi thì vào màn cuối
+            target = 0 if delta > 0 else len(self.stages) - 1
+        else:
+            target = (self.stage_index + delta) % len(self.stages)
         if self._load_stage(target):
             self.toasts.clear()
             self._say(f"Loaded {self.engine.title or self.engine.puzzle_id}.", Level.OK)
         else:
             self._fail(f"Could not load {self.stages[target].name} (see console).")
+
+    def _load(self) -> None:
+        """Nút Load: chọn một file puzzle JSON bất kỳ"""
+        try:
+            path = ask_puzzle_path(self.puzzle_root)
+        except DialogUnavailable as exc:
+            self._fail(f"Cannot open the file dialog: {exc}")
+            return
+        if path is None:
+            return                          # người dùng bấm Cancel
+        index = next((i for i, stage in enumerate(self.stages) if stage.resolve() == path.resolve()), None)
+        if self._open_puzzle(path, index):
+            self.toasts.clear()
+            self._say(f"Loaded {self.engine.title or self.engine.puzzle_id}.", Level.OK)
+        else:
+            self._fail(f"Could not load {path.name} (see console).")
 
     def _restart(self) -> None:
         self.engine.restart()
@@ -196,7 +221,7 @@ class App:
         self.board.shake(cell)
         if outcome is VerdictOutcome.NOT_PROVABLE:
             self._say(f"NOT PROVABLE: neither status of {who} is forced by the revealed clues ({queries}).", Level.WARN)
-            self.toasts.show(f"NOT_PROVABLE: {who} is not forced yet", Level.WARN)
+            self.toasts.show(f"NOT PROVABLE: {who} is not forced yet", Level.WARN)
         elif outcome is VerdictOutcome.CONTRADICTED:
             self._say(f"CONTRADICTED: {who} cannot be {status.value}; the opposite verdict is forced ({queries}).", Level.ERROR)
             self.toasts.show(f"CONTRADICTED: {who} is not {status.value}", Level.ERROR)
@@ -288,7 +313,7 @@ class App:
 
     def run(self) -> None:
         while self.running:
-            dt = self.clock.tick(60) / 1000
+            dt = min(self.clock.tick(FPS) / 1000, MAX_FRAME_DT)
             for e in pygame.event.get():
                 self.handle_event(e)
             self.update(dt)

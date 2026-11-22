@@ -14,6 +14,8 @@ from .theme import (
 COMPACT_PX = 160        # thẻ nhỏ hơn ngưỡng này chỉ hiện huy hiệu + tên
 SHAKE_DUR = 0.35
 SHAKE_WAVES = 3
+SHAKE_MIN_PX = 3
+SHAKE_AMP_FRAC = 0.04
 SELECT_SCALE = 1.03     # thẻ được chọn phóng to nhẹ
 SELECT_ANIM = 0.12      # giây để phóng to / thu lại
 ROLE_OUTSET = Space.xs
@@ -83,7 +85,7 @@ class CharacterCard:
         if self._shake_left <= 0:
             return 0
         t = 1.0 - self._shake_left / SHAKE_DUR
-        amplitude = max(3.0, self.rect.w * 0.04)
+        amplitude = max(SHAKE_MIN_PX, self.rect.w * SHAKE_AMP_FRAC)
         return round(amplitude * math.sin(2 * math.pi * SHAKE_WAVES * t) * (1.0 - t))
 
     def update(self, dt: float, duration: float = 0.5) -> None:
