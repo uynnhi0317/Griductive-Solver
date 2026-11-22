@@ -1,0 +1,384 @@
+{
+  "id": "5x5_03",
+  "title": "Deep Conspiracy",
+  "description": "Deep synthesis 5x5 stress puzzle starting from two face-up cards with a long multi-wave deduction chain.",
+  "size": 5,
+  "characters": {
+    "A1": {
+      "name": "Alice",
+      "profession": "Chef"
+    },
+    "B1": {
+      "name": "Bob",
+      "profession": "Chef"
+    },
+    "C1": {
+      "name": "Cara",
+      "profession": "Guard"
+    },
+    "D1": {
+      "name": "Dan",
+      "profession": "Engineer"
+    },
+    "E1": {
+      "name": "Eve",
+      "profession": "Chef"
+    },
+    "A2": {
+      "name": "Finn",
+      "profession": "Doctor"
+    },
+    "B2": {
+      "name": "Gina",
+      "profession": "Pilot"
+    },
+    "C2": {
+      "name": "Hugo",
+      "profession": "Cop"
+    },
+    "D2": {
+      "name": "Ivy",
+      "profession": "Guard"
+    },
+    "E2": {
+      "name": "Jack",
+      "profession": "Engineer"
+    },
+    "A3": {
+      "name": "Kara",
+      "profession": "Cop"
+    },
+    "B3": {
+      "name": "Liam",
+      "profession": "Chef"
+    },
+    "C3": {
+      "name": "Maya",
+      "profession": "Pilot"
+    },
+    "D3": {
+      "name": "Noah",
+      "profession": "Pilot"
+    },
+    "E3": {
+      "name": "Olga",
+      "profession": "Engineer"
+    },
+    "A4": {
+      "name": "Paul",
+      "profession": "Pilot"
+    },
+    "B4": {
+      "name": "Quinn",
+      "profession": "Cop"
+    },
+    "C4": {
+      "name": "Rosa",
+      "profession": "Engineer"
+    },
+    "D4": {
+      "name": "Sam",
+      "profession": "Guard"
+    },
+    "E4": {
+      "name": "Tara",
+      "profession": "Doctor"
+    },
+    "A5": {
+      "name": "Umar",
+      "profession": "Cop"
+    },
+    "B5": {
+      "name": "Vera",
+      "profession": "Guard"
+    },
+    "C5": {
+      "name": "Will",
+      "profession": "Cop"
+    },
+    "D5": {
+      "name": "Xena",
+      "profession": "Doctor"
+    },
+    "E5": {
+      "name": "Yuri",
+      "profession": "Doctor"
+    }
+  },
+  "solution": {
+    "A1": "CRIMINAL",
+    "B1": "CRIMINAL",
+    "C1": "CRIMINAL",
+    "D1": "INNOCENT",
+    "E1": "CRIMINAL",
+    "A2": "INNOCENT",
+    "B2": "CRIMINAL",
+    "C2": "CRIMINAL",
+    "D2": "CRIMINAL",
+    "E2": "INNOCENT",
+    "A3": "CRIMINAL",
+    "B3": "INNOCENT",
+    "C3": "INNOCENT",
+    "D3": "CRIMINAL",
+    "E3": "INNOCENT",
+    "A4": "INNOCENT",
+    "B4": "INNOCENT",
+    "C4": "INNOCENT",
+    "D4": "INNOCENT",
+    "E4": "CRIMINAL",
+    "A5": "INNOCENT",
+    "B5": "CRIMINAL",
+    "C5": "INNOCENT",
+    "D5": "INNOCENT",
+    "E5": "INNOCENT"
+  },
+  "clues": {
+    "A1": {
+      "type": "ONE_OF_K",
+      "status": "INNOCENT",
+      "cell": "D4",
+      "k": 1,
+      "region": {
+        "type": "CELLS",
+        "profession": "Guard"
+      }
+    },
+    "B1": {
+      "type": "ONE_OF_K",
+      "status": "INNOCENT",
+      "cell": "A4",
+      "k": 2,
+      "region": {
+        "type": "CELLS",
+        "profession": "Pilot"
+      }
+    },
+    "C1": {
+      "type": "ONE_OF_K",
+      "status": "CRIMINAL",
+      "cell": "C2",
+      "k": 2,
+      "region": {
+        "type": "CELLS",
+        "profession": "Cop"
+      }
+    },
+    "D1": {
+      "type": "ONE_OF_K",
+      "status": "INNOCENT",
+      "cell": "E3",
+      "k": 4,
+      "region": {
+        "type": "CELLS",
+        "profession": "Engineer"
+      }
+    },
+    "E1": {
+      "type": "ONE_OF_K",
+      "status": "INNOCENT",
+      "cell": "C5",
+      "k": 3,
+      "region": {
+        "type": "CELLS",
+        "profession": "Cop"
+      }
+    },
+    "A2": {
+      "type": "IF_THEN",
+      "cell": "E4",
+      "status": "CRIMINAL",
+      "then": {
+        "type": "ONE_OF_K",
+        "status": "INNOCENT",
+        "cell": "C3",
+        "k": 1,
+        "region": {
+          "type": "CELLS",
+          "cells": [
+            "B1",
+            "C3",
+            "E4"
+          ]
+        }
+      }
+    },
+    "B2": {
+      "type": "ONE_OF_K",
+      "status": "CRIMINAL",
+      "cell": "D2",
+      "k": 3,
+      "region": {
+        "type": "CELLS",
+        "profession": "Guard"
+      }
+    },
+    "C2": {
+      "type": "ONE_OF_K",
+      "status": "INNOCENT",
+      "cell": "A5",
+      "k": 3,
+      "region": {
+        "type": "CELLS",
+        "profession": "Cop"
+      }
+    },
+    "D2": {
+      "type": "ONE_OF_K",
+      "status": "CRIMINAL",
+      "cell": "A1",
+      "k": 3,
+      "region": {
+        "type": "CELLS",
+        "profession": "Chef"
+      }
+    },
+    "E2": {
+      "type": "PARITY",
+      "status": "INNOCENT",
+      "parity": "EVEN",
+      "region": {
+        "type": "CELLS",
+        "profession": "Engineer"
+      }
+    },
+    "A3": {
+      "type": "ONE_OF_K",
+      "status": "CRIMINAL",
+      "cell": "B2",
+      "k": 2,
+      "region": {
+        "type": "CELLS",
+        "profession": "Pilot"
+      }
+    },
+    "B3": {
+      "type": "PARITY",
+      "status": "INNOCENT",
+      "parity": "EVEN",
+      "region": {
+        "type": "CELLS",
+        "profession": "Pilot"
+      }
+    },
+    "C3": {
+      "type": "ONE_OF_K",
+      "status": "CRIMINAL",
+      "cell": "E4",
+      "k": 1,
+      "region": {
+        "type": "CELLS",
+        "profession": "Doctor"
+      }
+    },
+    "D3": {
+      "type": "NO_ADJACENT",
+      "status": "INNOCENT",
+      "region": {
+        "type": "CELLS",
+        "profession": "Guard"
+      }
+    },
+    "E3": {
+      "type": "NO_ADJACENT",
+      "status": "INNOCENT",
+      "region": {
+        "type": "CELLS",
+        "profession": "Pilot"
+      }
+    },
+    "A4": {
+      "type": "NO_ADJACENT",
+      "status": "INNOCENT",
+      "region": {
+        "type": "CELLS",
+        "profession": "Chef"
+      }
+    },
+    "B4": {
+      "type": "NO_ADJACENT",
+      "status": "CRIMINAL",
+      "region": {
+        "type": "CELLS",
+        "profession": "Pilot"
+      }
+    },
+    "C4": {
+      "type": "ONE_OF_K",
+      "status": "INNOCENT",
+      "cell": "A2",
+      "k": 3,
+      "region": {
+        "type": "CELLS",
+        "profession": "Doctor"
+      }
+    },
+    "D4": {
+      "type": "PARITY",
+      "status": "CRIMINAL",
+      "parity": "EVEN",
+      "region": {
+        "type": "CELLS",
+        "profession": "Cop"
+      }
+    },
+    "E4": {
+      "type": "PARITY",
+      "status": "CRIMINAL",
+      "parity": "ODD",
+      "region": {
+        "type": "CELLS",
+        "profession": "Chef"
+      }
+    },
+    "A5": {
+      "type": "ONE_OF_K",
+      "status": "CRIMINAL",
+      "cell": "E1",
+      "k": 3,
+      "region": {
+        "type": "CELLS",
+        "profession": "Chef"
+      }
+    },
+    "B5": {
+      "type": "NO_ADJACENT",
+      "status": "CRIMINAL",
+      "region": {
+        "type": "CELLS",
+        "profession": "Engineer"
+      }
+    },
+    "C5": {
+      "type": "ONE_OF_K",
+      "status": "INNOCENT",
+      "cell": "B4",
+      "k": 3,
+      "region": {
+        "type": "CELLS",
+        "profession": "Cop"
+      }
+    },
+    "D5": {
+      "type": "CONNECTED",
+      "status": "INNOCENT",
+      "region": {
+        "type": "ROW",
+        "number": 4
+      }
+    },
+    "E5": {
+      "type": "ONE_OF_K",
+      "status": "INNOCENT",
+      "cell": "E2",
+      "k": 4,
+      "region": {
+        "type": "CELLS",
+        "profession": "Engineer"
+      }
+    }
+  },
+  "initially_revealed": [
+    "C3",
+    "B4"
+  ]
+}

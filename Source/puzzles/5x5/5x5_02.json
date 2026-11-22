@@ -1,0 +1,506 @@
+{
+  "id": "5x5_02",
+  "title": "Tseitin Gridlock",
+  "description": "Heavy 5x5 stress benchmark with dense 5-cell PARITY and 8-neighbor EXACTLY constraints.",
+  "size": 5,
+  "characters": {
+    "A1": {
+      "name": "Alice",
+      "profession": "Actor"
+    },
+    "B1": {
+      "name": "Bob",
+      "profession": "Baker"
+    },
+    "C1": {
+      "name": "Cara",
+      "profession": "Chef"
+    },
+    "D1": {
+      "name": "Dan",
+      "profession": "Doctor"
+    },
+    "E1": {
+      "name": "Eve",
+      "profession": "Engineer"
+    },
+    "A2": {
+      "name": "Finn",
+      "profession": "Farmer"
+    },
+    "B2": {
+      "name": "Gina",
+      "profession": "Guard"
+    },
+    "C2": {
+      "name": "Hugo",
+      "profession": "Hunter"
+    },
+    "D2": {
+      "name": "Ivy",
+      "profession": "Interpreter"
+    },
+    "E2": {
+      "name": "Jack",
+      "profession": "Judge"
+    },
+    "A3": {
+      "name": "Kara",
+      "profession": "Keeper"
+    },
+    "B3": {
+      "name": "Liam",
+      "profession": "Lawyer"
+    },
+    "C3": {
+      "name": "Maya",
+      "profession": "Mason"
+    },
+    "D3": {
+      "name": "Noah",
+      "profession": "Nurse"
+    },
+    "E3": {
+      "name": "Olga",
+      "profession": "Optician"
+    },
+    "A4": {
+      "name": "Paul",
+      "profession": "Pilot"
+    },
+    "B4": {
+      "name": "Quinn",
+      "profession": "Quilter"
+    },
+    "C4": {
+      "name": "Rosa",
+      "profession": "Ranger"
+    },
+    "D4": {
+      "name": "Sam",
+      "profession": "Sailor"
+    },
+    "E4": {
+      "name": "Tara",
+      "profession": "Tailor"
+    },
+    "A5": {
+      "name": "Umar",
+      "profession": "Usher"
+    },
+    "B5": {
+      "name": "Vera",
+      "profession": "Valet"
+    },
+    "C5": {
+      "name": "Will",
+      "profession": "Warden"
+    },
+    "D5": {
+      "name": "Xena",
+      "profession": "Xylophonist"
+    },
+    "E5": {
+      "name": "Yuri",
+      "profession": "Yeoman"
+    }
+  },
+  "solution": {
+    "A1": "INNOCENT",
+    "B1": "CRIMINAL",
+    "C1": "INNOCENT",
+    "D1": "INNOCENT",
+    "E1": "INNOCENT",
+    "A2": "INNOCENT",
+    "B2": "CRIMINAL",
+    "C2": "INNOCENT",
+    "D2": "CRIMINAL",
+    "E2": "INNOCENT",
+    "A3": "INNOCENT",
+    "B3": "INNOCENT",
+    "C3": "CRIMINAL",
+    "D3": "CRIMINAL",
+    "E3": "INNOCENT",
+    "A4": "CRIMINAL",
+    "B4": "CRIMINAL",
+    "C4": "CRIMINAL",
+    "D4": "INNOCENT",
+    "E4": "CRIMINAL",
+    "A5": "INNOCENT",
+    "B5": "INNOCENT",
+    "C5": "CRIMINAL",
+    "D5": "CRIMINAL",
+    "E5": "CRIMINAL"
+  },
+  "clues": {
+    "A1": {
+      "type": "ONE_OF_K",
+      "status": "CRIMINAL",
+      "cell": "A4",
+      "k": 3,
+      "region": {
+        "type": "CELLS",
+        "cells": [
+          "B2",
+          "A4",
+          "D5"
+        ]
+      }
+    },
+    "B1": {
+      "type": "IF_THEN",
+      "cell": "C1",
+      "status": "INNOCENT",
+      "then": {
+        "type": "EXACTLY",
+        "k": 2,
+        "region": {
+          "type": "ROW",
+          "number": 3
+        }
+      }
+    },
+    "C1": {
+      "type": "IF_THEN",
+      "cell": "A3",
+      "status": "INNOCENT",
+      "then": {
+        "type": "PARITY",
+        "status": "CRIMINAL",
+        "parity": "ODD",
+        "region": {
+          "type": "CELLS",
+          "cells": [
+            "D2",
+            "B4",
+            "C4"
+          ]
+        }
+      }
+    },
+    "D1": {
+      "type": "IF_THEN",
+      "cell": "A2",
+      "status": "INNOCENT",
+      "then": {
+        "type": "EXACTLY",
+        "k": 3,
+        "region": {
+          "type": "ROW",
+          "number": 5
+        }
+      }
+    },
+    "E1": {
+      "type": "IF_THEN",
+      "cell": "B2",
+      "status": "CRIMINAL",
+      "then": {
+        "type": "EXACTLY",
+        "k": 2,
+        "region": {
+          "type": "CELLS",
+          "cells": [
+            "D2",
+            "C4"
+          ]
+        }
+      }
+    },
+    "A2": {
+      "type": "IF_THEN",
+      "cell": "E2",
+      "status": "INNOCENT",
+      "then": {
+        "type": "EXACTLY",
+        "k": 2,
+        "region": {
+          "type": "ROW",
+          "number": 3
+        }
+      }
+    },
+    "B2": {
+      "type": "IF_THEN",
+      "cell": "D4",
+      "status": "INNOCENT",
+      "then": {
+        "type": "EXACTLY",
+        "k": 0,
+        "region": {
+          "type": "CELLS",
+          "cells": [
+            "E1",
+            "A3"
+          ]
+        }
+      }
+    },
+    "C2": {
+      "type": "ONE_OF_K",
+      "status": "CRIMINAL",
+      "cell": "D2",
+      "k": 1,
+      "region": {
+        "type": "NEIGHBORS",
+        "cell": "E1"
+      }
+    },
+    "D2": {
+      "type": "IF_THEN",
+      "cell": "D3",
+      "status": "CRIMINAL",
+      "then": {
+        "type": "EXACTLY",
+        "k": 0,
+        "region": {
+          "type": "CELLS",
+          "cells": [
+            "E1",
+            "A3"
+          ]
+        }
+      }
+    },
+    "E2": {
+      "type": "IF_THEN",
+      "cell": "A2",
+      "status": "INNOCENT",
+      "then": {
+        "type": "ONE_OF_K",
+        "status": "CRIMINAL",
+        "cell": "E4",
+        "k": 7,
+        "region": {
+          "type": "NEIGHBORS",
+          "cell": "D4"
+        }
+      }
+    },
+    "A3": {
+      "type": "IF_THEN",
+      "cell": "C1",
+      "status": "INNOCENT",
+      "then": {
+        "type": "EXACTLY",
+        "k": 0,
+        "region": {
+          "type": "CELLS",
+          "cells": [
+            "E1",
+            "A3"
+          ]
+        }
+      }
+    },
+    "B3": {
+      "type": "ONE_OF_K",
+      "status": "CRIMINAL",
+      "cell": "D2",
+      "k": 3,
+      "region": {
+        "type": "NEIGHBORS",
+        "cell": "E3"
+      }
+    },
+    "C3": {
+      "type": "NO_ADJACENT",
+      "status": "CRIMINAL",
+      "region": {
+        "type": "CELLS",
+        "cells": [
+          "C1",
+          "D2"
+        ]
+      }
+    },
+    "D3": {
+      "type": "ONE_OF_K",
+      "status": "INNOCENT",
+      "cell": "D1",
+      "k": 2,
+      "region": {
+        "type": "NEIGHBORS",
+        "cell": "C1"
+      }
+    },
+    "E3": {
+      "type": "IF_THEN",
+      "cell": "E1",
+      "status": "INNOCENT",
+      "then": {
+        "type": "PARITY",
+        "status": "INNOCENT",
+        "parity": "EVEN",
+        "region": {
+          "type": "CELLS",
+          "cells": [
+            "B2",
+            "A4",
+            "D5"
+          ]
+        }
+      }
+    },
+    "A4": {
+      "type": "ONE_OF_K",
+      "status": "INNOCENT",
+      "cell": "A2",
+      "k": 3,
+      "region": {
+        "type": "NEIGHBORS",
+        "cell": "B3"
+      }
+    },
+    "B4": {
+      "type": "ONE_OF_K",
+      "status": "INNOCENT",
+      "cell": "A1",
+      "k": 3,
+      "region": {
+        "type": "CELLS",
+        "cells": [
+          "A1",
+          "D1",
+          "B5"
+        ]
+      }
+    },
+    "C4": {
+      "type": "IF_THEN",
+      "cell": "A1",
+      "status": "INNOCENT",
+      "then": {
+        "type": "EXACTLY",
+        "k": 2,
+        "region": {
+          "type": "ROW",
+          "number": 3
+        }
+      }
+    },
+    "D4": {
+      "type": "IF_THEN",
+      "cell": "B4",
+      "status": "CRIMINAL",
+      "then": {
+        "type": "PARITY",
+        "status": "INNOCENT",
+        "parity": "EVEN",
+        "region": {
+          "type": "CELLS",
+          "cells": [
+            "A1",
+            "A2",
+            "C4"
+          ]
+        }
+      }
+    },
+    "E4": {
+      "type": "IF_THEN",
+      "cell": "C5",
+      "status": "CRIMINAL",
+      "then": {
+        "type": "PARITY",
+        "status": "INNOCENT",
+        "parity": "EVEN",
+        "region": {
+          "type": "CELLS",
+          "cells": [
+            "A1",
+            "A2",
+            "C4"
+          ]
+        }
+      }
+    },
+    "A5": {
+      "type": "IF_THEN",
+      "cell": "B4",
+      "status": "CRIMINAL",
+      "then": {
+        "type": "EXACTLY",
+        "k": 0,
+        "region": {
+          "type": "CELLS",
+          "cells": [
+            "E1",
+            "A3"
+          ]
+        }
+      }
+    },
+    "B5": {
+      "type": "IF_THEN",
+      "cell": "C2",
+      "status": "INNOCENT",
+      "then": {
+        "type": "EXACTLY",
+        "k": 0,
+        "region": {
+          "type": "CELLS",
+          "cells": [
+            "E1",
+            "A3"
+          ]
+        }
+      }
+    },
+    "C5": {
+      "type": "IF_THEN",
+      "cell": "D3",
+      "status": "CRIMINAL",
+      "then": {
+        "type": "EXACTLY",
+        "k": 2,
+        "region": {
+          "type": "CELLS",
+          "cells": [
+            "D2",
+            "C4"
+          ]
+        }
+      }
+    },
+    "D5": {
+      "type": "IF_THEN",
+      "cell": "B3",
+      "status": "INNOCENT",
+      "then": {
+        "type": "EXACTLY",
+        "k": 0,
+        "region": {
+          "type": "CELLS",
+          "cells": [
+            "E1",
+            "A3"
+          ]
+        }
+      }
+    },
+    "E5": {
+      "type": "IF_THEN",
+      "cell": "D2",
+      "status": "CRIMINAL",
+      "then": {
+        "type": "PARITY",
+        "status": "INNOCENT",
+        "parity": "EVEN",
+        "region": {
+          "type": "CELLS",
+          "cells": [
+            "A1",
+            "A2",
+            "C4"
+          ]
+        }
+      }
+    }
+  },
+  "initially_revealed": [
+    "B2",
+    "D4",
+    "C3"
+  ]
+}

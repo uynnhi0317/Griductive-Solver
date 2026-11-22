@@ -1,0 +1,389 @@
+{
+  "id": "5x5_01",
+  "title": "Grand Precinct",
+  "description": "Moderate 5x5 stress benchmark covering core templates, all five extensions, and profession regions.",
+  "size": 5,
+  "characters": {
+    "A1": {
+      "name": "Alice",
+      "profession": "Pilot"
+    },
+    "B1": {
+      "name": "Bob",
+      "profession": "Pilot"
+    },
+    "C1": {
+      "name": "Cara",
+      "profession": "Pilot"
+    },
+    "D1": {
+      "name": "Dan",
+      "profession": "Chef"
+    },
+    "E1": {
+      "name": "Eve",
+      "profession": "Cop"
+    },
+    "A2": {
+      "name": "Finn",
+      "profession": "Chef"
+    },
+    "B2": {
+      "name": "Gina",
+      "profession": "Cop"
+    },
+    "C2": {
+      "name": "Hugo",
+      "profession": "Guard"
+    },
+    "D2": {
+      "name": "Ivy",
+      "profession": "Cop"
+    },
+    "E2": {
+      "name": "Jack",
+      "profession": "Engineer"
+    },
+    "A3": {
+      "name": "Kara",
+      "profession": "Engineer"
+    },
+    "B3": {
+      "name": "Liam",
+      "profession": "Cop"
+    },
+    "C3": {
+      "name": "Maya",
+      "profession": "Engineer"
+    },
+    "D3": {
+      "name": "Noah",
+      "profession": "Doctor"
+    },
+    "E3": {
+      "name": "Olga",
+      "profession": "Doctor"
+    },
+    "A4": {
+      "name": "Paul",
+      "profession": "Engineer"
+    },
+    "B4": {
+      "name": "Quinn",
+      "profession": "Doctor"
+    },
+    "C4": {
+      "name": "Rosa",
+      "profession": "Chef"
+    },
+    "D4": {
+      "name": "Sam",
+      "profession": "Guard"
+    },
+    "E4": {
+      "name": "Tara",
+      "profession": "Doctor"
+    },
+    "A5": {
+      "name": "Umar",
+      "profession": "Guard"
+    },
+    "B5": {
+      "name": "Vera",
+      "profession": "Pilot"
+    },
+    "C5": {
+      "name": "Will",
+      "profession": "Chef"
+    },
+    "D5": {
+      "name": "Xena",
+      "profession": "Guard"
+    },
+    "E5": {
+      "name": "Yuri",
+      "profession": "Cop"
+    }
+  },
+  "solution": {
+    "A1": "CRIMINAL",
+    "B1": "INNOCENT",
+    "C1": "CRIMINAL",
+    "D1": "INNOCENT",
+    "E1": "INNOCENT",
+    "A2": "CRIMINAL",
+    "B2": "CRIMINAL",
+    "C2": "INNOCENT",
+    "D2": "INNOCENT",
+    "E2": "CRIMINAL",
+    "A3": "CRIMINAL",
+    "B3": "INNOCENT",
+    "C3": "INNOCENT",
+    "D3": "INNOCENT",
+    "E3": "CRIMINAL",
+    "A4": "INNOCENT",
+    "B4": "CRIMINAL",
+    "C4": "INNOCENT",
+    "D4": "CRIMINAL",
+    "E4": "INNOCENT",
+    "A5": "INNOCENT",
+    "B5": "INNOCENT",
+    "C5": "INNOCENT",
+    "D5": "CRIMINAL",
+    "E5": "CRIMINAL"
+  },
+  "clues": {
+    "A1": {
+      "type": "NO_ADJACENT",
+      "status": "CRIMINAL",
+      "region": {
+        "type": "CELLS",
+        "profession": "Doctor"
+      }
+    },
+    "B1": {
+      "type": "NO_ADJACENT",
+      "status": "INNOCENT",
+      "region": {
+        "type": "CELLS",
+        "profession": "Pilot"
+      }
+    },
+    "C1": {
+      "type": "ONE_OF_K",
+      "status": "INNOCENT",
+      "cell": "C4",
+      "k": 3,
+      "region": {
+        "type": "CELLS",
+        "profession": "Chef"
+      }
+    },
+    "D1": {
+      "type": "ONE_OF_K",
+      "status": "CRIMINAL",
+      "cell": "A2",
+      "k": 1,
+      "region": {
+        "type": "CELLS",
+        "profession": "Chef"
+      }
+    },
+    "E1": {
+      "type": "ONE_OF_K",
+      "status": "CRIMINAL",
+      "cell": "B2",
+      "k": 2,
+      "region": {
+        "type": "CELLS",
+        "profession": "Cop"
+      }
+    },
+    "A2": {
+      "type": "ONE_OF_K",
+      "status": "INNOCENT",
+      "cell": "D3",
+      "k": 2,
+      "region": {
+        "type": "CELLS",
+        "profession": "Doctor"
+      }
+    },
+    "B2": {
+      "type": "ONE_OF_K",
+      "status": "INNOCENT",
+      "cell": "B1",
+      "k": 2,
+      "region": {
+        "type": "CELLS",
+        "profession": "Pilot"
+      }
+    },
+    "C2": {
+      "type": "ONE_OF_K",
+      "status": "INNOCENT",
+      "cell": "D1",
+      "k": 3,
+      "region": {
+        "type": "CELLS",
+        "profession": "Chef"
+      }
+    },
+    "D2": {
+      "type": "IF_THEN",
+      "cell": "D3",
+      "status": "INNOCENT",
+      "then": {
+        "type": "ONE_OF_K",
+        "status": "INNOCENT",
+        "cell": "E4",
+        "k": 5,
+        "region": {
+          "type": "NEIGHBORS",
+          "cell": "D3"
+        }
+      }
+    },
+    "E2": {
+      "type": "PARITY",
+      "status": "INNOCENT",
+      "parity": "ODD",
+      "region": {
+        "type": "CELLS",
+        "profession": "Cop"
+      }
+    },
+    "A3": {
+      "type": "PARITY",
+      "status": "INNOCENT",
+      "parity": "EVEN",
+      "region": {
+        "type": "CELLS",
+        "profession": "Engineer"
+      }
+    },
+    "B3": {
+      "type": "PARITY",
+      "status": "CRIMINAL",
+      "parity": "EVEN",
+      "region": {
+        "type": "CELLS",
+        "profession": "Cop"
+      }
+    },
+    "C3": {
+      "type": "ONE_OF_K",
+      "status": "INNOCENT",
+      "cell": "D2",
+      "k": 3,
+      "region": {
+        "type": "CELLS",
+        "profession": "Cop"
+      }
+    },
+    "D3": {
+      "type": "ONE_OF_K",
+      "status": "CRIMINAL",
+      "cell": "D5",
+      "k": 2,
+      "region": {
+        "type": "CELLS",
+        "profession": "Guard"
+      }
+    },
+    "E3": {
+      "type": "ONE_OF_K",
+      "status": "INNOCENT",
+      "cell": "C2",
+      "k": 2,
+      "region": {
+        "type": "CELLS",
+        "profession": "Guard"
+      }
+    },
+    "A4": {
+      "type": "ONE_OF_K",
+      "status": "CRIMINAL",
+      "cell": "E5",
+      "k": 2,
+      "region": {
+        "type": "CELLS",
+        "profession": "Cop"
+      }
+    },
+    "B4": {
+      "type": "ONE_OF_K",
+      "status": "INNOCENT",
+      "cell": "E1",
+      "k": 3,
+      "region": {
+        "type": "CELLS",
+        "profession": "Cop"
+      }
+    },
+    "C4": {
+      "type": "NO_ADJACENT",
+      "status": "CRIMINAL",
+      "region": {
+        "type": "CELLS",
+        "profession": "Chef"
+      }
+    },
+    "D4": {
+      "type": "ONE_OF_K",
+      "status": "INNOCENT",
+      "cell": "C3",
+      "k": 2,
+      "region": {
+        "type": "CELLS",
+        "profession": "Engineer"
+      }
+    },
+    "E4": {
+      "type": "IF_THEN",
+      "cell": "C3",
+      "status": "INNOCENT",
+      "then": {
+        "type": "CONNECTED",
+        "status": "INNOCENT",
+        "region": {
+          "type": "ROW",
+          "number": 3
+        }
+      }
+    },
+    "A5": {
+      "type": "ONE_OF_K",
+      "status": "INNOCENT",
+      "cell": "A4",
+      "k": 2,
+      "region": {
+        "type": "CELLS",
+        "profession": "Engineer"
+      }
+    },
+    "B5": {
+      "type": "ONE_OF_K",
+      "status": "CRIMINAL",
+      "cell": "A3",
+      "k": 2,
+      "region": {
+        "type": "CELLS",
+        "profession": "Engineer"
+      }
+    },
+    "C5": {
+      "type": "PARITY",
+      "status": "CRIMINAL",
+      "parity": "EVEN",
+      "region": {
+        "type": "CELLS",
+        "profession": "Pilot"
+      }
+    },
+    "D5": {
+      "type": "ONE_OF_K",
+      "status": "CRIMINAL",
+      "cell": "D4",
+      "k": 2,
+      "region": {
+        "type": "CELLS",
+        "profession": "Guard"
+      }
+    },
+    "E5": {
+      "type": "PARITY",
+      "status": "CRIMINAL",
+      "parity": "EVEN",
+      "region": {
+        "type": "CELLS",
+        "profession": "Guard"
+      }
+    }
+  },
+  "initially_revealed": [
+    "C3",
+    "A1",
+    "E5"
+  ]
+}
