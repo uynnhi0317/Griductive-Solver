@@ -12,7 +12,7 @@ from .clue_panel import CluePanel
 from .dialogs import DialogUnavailable, ask_puzzle_path
 from .highlight import highlight_roles
 from .layout import MIN_WINDOW, compute_layout
-from .theme import Color, Level
+from .theme import Color, Level, clear_caches
 from .widgets import ToastManager
 
 PUZZLE_ROOT = Path(__file__).resolve().parent.parent / "puzzles"
@@ -319,4 +319,5 @@ class App:
             self.update(dt)
             self.draw()
             pygame.display.flip()
+        clear_caches()
         pygame.quit()

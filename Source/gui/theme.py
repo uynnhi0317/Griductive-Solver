@@ -185,7 +185,14 @@ def fit_wrapped(text: str, max_width: int, max_height: int, max_size: int, min_s
         lines[-1] = last.rstrip() + "..."
     return font, lines
 
-
+def clear_caches() -> None:
+    """
+    Xóa cache font và chữ đã render. Font bị hỏng sau pygame.quit(), nên phải gọi hàm này
+    trước pygame.quit() nếu sau đó còn pygame.init() lại (ví dụ giữa các test).
+    """
+    render_text.cache_clear()
+    get_font.cache_clear()
+    
 # ---------------------------------------------------------------- drawing
 def draw_rect_alpha(surface, color, rect, radius=0):
     shape = pygame.Surface(pygame.Rect(rect).size, pygame.SRCALPHA)
