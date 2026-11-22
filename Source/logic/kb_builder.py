@@ -10,8 +10,12 @@ Dựng cơ sở tri thức tại bước suy diễn t:
 """
 
 from dataclasses import dataclass
+from typing import Iterable, Mapping
 
+from game.board import Board
 from game.cell import Cell
+from game.character import Status
+from game.clue import Clue
 from game.public_state import PublicState
 
 from .clue_encoder import encode_clue
@@ -48,17 +52,25 @@ def build_kb(state: PublicState) -> KnowledgeBase:
     """Dựng KB_t từ public state hiện tại"""
     if not isinstance(state, PublicState):
         raise TypeError(f"[KBBuilder]: Chỉ nhận PublicState, nhận được {type(state).__name__}")
+    return encode_kb(state.board, state.revealed_clues().values(), state.verdicts(), state.active_clue_ids())
 
-    vmap = VariableMap(state.board)
+
+def encode_kb(board: Board, clues: Iterable[Clue], verdicts: Mapping[Cell, Status],
+              clue_ids: tuple[str, ...] = ()) -> KnowledgeBase:
+    """
+    Mã hóa KB từ một tập clue và verdict bất kỳ
+    + build_kb dùng với toàn bộ clue đã lộ của PublicState
+    + Hint dùng với một phần clue để tìm tập clue tối thiểu
+    """
+    vmap = VariableMap(board)
     cnf = CNF()
 
-    # CNF(clue đã lộ)
-    for clue in state.revealed_clues().values():
+    # CNF(clue)
+    for clue in clues:
         cnf.extend(encode_clue(clue, vmap))
     clue_clauses = len(cnf)
 
     # Unit clause cho verdict đã chứng minh
-    verdicts = state.verdicts()
     for cell, status in verdicts.items():
         cnf.add_clause([vmap.status_literal(cell, status)])
     verdict_units = len(cnf) - clue_clauses
@@ -67,7 +79,7 @@ def build_kb(state: PublicState) -> KnowledgeBase:
         cnf=cnf,
         vmap=vmap,
         stats=compute_stats(cnf, vmap),
-        clue_ids=state.active_clue_ids(),
+        clue_ids=clue_ids,
         clue_clauses=clue_clauses,
         verdict_units=verdict_units,
     )

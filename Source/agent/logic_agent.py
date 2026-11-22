@@ -28,12 +28,10 @@ from engine.game_engine import GameEngine, VerdictOutcome
 from game.cell import Cell
 from game.clue import Clue
 from game.public_state import PublicState
-from logic.clue_encoder import encode_clue
-from logic.cnf import CNF
-from logic.variable_map import VariableMap
+from logic.kb_builder import encode_kb
 from solver.dpll import SolverTimeout, solve
 
-from .entailment import EntailmentReport, Verdict, classify_state
+from .entailment import EntailmentReport, EntailmentTimeout, Verdict, classify_state
 from .trace import AgentStatus, DeductionTrace, TraceStep
 
 
@@ -55,7 +53,7 @@ class LogicAgent:
     + time_limit: giới hạn giây cho mỗi SAT query của agent (None = không giới hạn)
     + reuse_models: dùng ModelPool để bỏ qua truy vấn chắc chắn SAT (tắt để đo số truy vấn gốc)
     + Mỗi lần step() nộp đúng một verdict; run() lặp step() tới trạng thái kết thúc
-    + Sau engine.restart() cần gọi agent.reset() để bắt đầu trace mới
+    + State của engine bị đổi từ bên ngoài thì step() tự reset trace
     """
 
     def __init__(self, engine: GameEngine, time_limit: float | None = None, reuse_models: bool = True) -> None:
@@ -65,7 +63,7 @@ class LogicAgent:
         self._engine = engine
         self._time_limit = time_limit
         self._reuse_models = reuse_models
-        self._trace = self._new_trace()
+        self.reset()
 
     # Thông tin
 
@@ -87,6 +85,7 @@ class LogicAgent:
     def reset(self) -> None:
         """Bắt đầu trace mới từ state hiện tại của engine"""
         self._trace = self._new_trace()
+        self._seen_state = self._engine.state   # state agent biết lần cuối
 
     def analyze(self) -> EntailmentReport:
         """Phân loại mọi ô chưa giải trên state hiện tại"""
@@ -104,6 +103,9 @@ class LogicAgent:
         + Trả về TraceStep nếu đã nộp một verdict ép buộc
         + Trả về None nếu đã ở trạng thái kết thúc
         """
+        # State bị đổi từ bên ngoài -> trace cũ không còn đúng
+        if self.state is not self._seen_state:
+            self.reset()
         if self._trace.status.is_terminal:
             return None
         state = self.state
@@ -113,7 +115,7 @@ class LogicAgent:
         try:
             report = self.analyze()
         except SolverTimeout as exc:
-            self._trace.final_stats.merge(exc.stats)
+            self._record_timeout(exc)
             return self._finish(AgentStatus.TIMEOUT)
 
         if not report.consistent:
@@ -129,7 +131,7 @@ class LogicAgent:
             result = self._engine.submit_verdict(choice.cell, choice.verdict.to_status())
         except SolverTimeout as exc:
             self._record_final(report)
-            self._trace.final_stats.merge(exc.stats)
+            self._record_timeout(exc)
             return self._finish(AgentStatus.TIMEOUT)
 
         if result.outcome is not VerdictOutcome.ACCEPTED:
@@ -153,6 +155,7 @@ class LogicAgent:
             revealed_clue_id=revealed.clue_id if revealed else None,
         )
         self._trace.steps.append(trace_step)
+        self._seen_state = self.state
 
         if self.state.is_solved():
             self._finish(AgentStatus.SOLVED)
@@ -185,6 +188,13 @@ class LogicAgent:
         self._trace.final_stats.merge(report.stats)
         if unknown:
             self._trace.final_unknown = _unknown_labels(report)
+
+    def _record_timeout(self, exc: SolverTimeout) -> None:
+        """Ghi các truy vấn đã chạy, kể cả truy vấn bị timeout vào lần phân loại cuối"""
+        if not isinstance(exc, EntailmentTimeout):
+            exc = EntailmentTimeout.wrap(exc)
+        self._trace.final_queries += exc.num_queries
+        self._trace.final_stats.merge(exc.total_stats())
 
     def _finish(self, status: AgentStatus) -> None:
         """Ghi trạng thái kết thúc vào trace; trả None để step() return gọn"""
@@ -232,15 +242,10 @@ def _minimal_support(state: PublicState, cell: Cell, verdict: Verdict, time_limi
 
 
 def _entails(state: PublicState, clues: list[Clue], cell: Cell, verdict: Verdict, time_limit: float | None) -> bool:
-    """CNF(clues) ∧ verdict units |= verdict tại cell  <=>  thêm literal đối nghịch thì UNSAT"""
-    vmap = VariableMap(state.board)
-    cnf = CNF()
-    for clue in clues:
-        cnf.extend(encode_clue(clue, vmap))
-    for known, status in state.verdicts().items():
-        cnf.add_clause([vmap.status_literal(known, status)])
-    opposite = -vmap.status_literal(cell, verdict.to_status())
-    return not solve(cnf, num_vars=vmap.max_var, assumptions=(opposite,), time_limit=time_limit).sat
+    """KB(clues) |= verdict tại cell  <=>  thêm literal đối nghịch thì UNSAT"""
+    kb = encode_kb(state.board, clues, state.verdicts())
+    opposite = -kb.vmap.status_literal(cell, verdict.to_status())
+    return not solve(kb.cnf, num_vars=kb.num_vars, assumptions=(opposite,), time_limit=time_limit).sat
 
 
 def _unknown_labels(report: EntailmentReport) -> tuple[str, ...]:
