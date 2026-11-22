@@ -21,6 +21,10 @@ Tái sử dụng model:
   (tương tự với C_i = True và KB_t ∧ C_i)
 + ModelPool gom các model thu được để bỏ qua những truy vấn đã biết chắc là SAT
 + Chỉ bỏ được truy vấn SAT, không bao giờ bỏ truy vấn có thể UNSAT nên kết quả không đổi
+
+Timeout:
++ Hết giờ ở bất kỳ truy vấn nào -> báo EntailmentTimeout (lớp con của SolverTimeout),
+  mang theo các truy vấn đã chạy xong để trace / benchmark đếm đủ số SAT query
 """
 
 from dataclasses import dataclass, field
