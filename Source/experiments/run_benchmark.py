@@ -233,8 +233,12 @@ def _write_csv(path: Path, fields: Sequence[str], rows: Iterable[dict[str, Any]]
 def _step_fields(steps: Sequence[dict[str, Any]]) -> list[str]:
     """Cột của file steps: cột định danh trước, sau đó khoá của TraceStep.as_dict theo thứ tự xuất hiện"""
     fields = list(STEP_ID_FIELDS)
+    seen = set(fields)
     for step in steps:
-        fields.extend(key for key in step if key not in fields)
+        for key in step:
+            if key not in seen:
+                seen.add(key)
+                fields.append(key)
     return fields
 
 
@@ -246,8 +250,9 @@ def _format_cell(value: Any) -> Any:
 # Tiện ích
 
 def _size_from_path(path: Path) -> int | str:
-    """Đoán N từ tên thư mục 'NxN' hoặc tiền tố tên file 'NxN_..'; dùng cho lọc và cho dòng LOAD_ERROR"""
-    for name in (path.parent.name, path.stem.split("_", 1)[0]):
+    """Đoán N từ tiền tố tên file hoặc các thư mục cha; dùng cho lọc và cho dòng LOAD_ERROR"""
+    candidates = [path.stem.split("_", 1)[0]] + list(reversed(path.parts[:-1]))
+    for name in candidates:
         rows, sep, cols = name.partition("x")
         if sep and rows.isdigit() and rows == cols:
             return int(rows)

@@ -47,8 +47,8 @@ SUMMARY_FIELDS: tuple[str, ...] = (
     # Solver (vòng suy diễn)
     "decisions", "propagations", "pure_literals", "backtracks", "solver_time", "runtime",
     # Uniqueness check
-    "uniqueness", "uniq_sat_calls", "uniq_decisions", "uniq_propagations", "uniq_backtracks",
-    "uniq_solver_time", "uniq_runtime",
+    "uniqueness", "uniq_sat_calls", "uniq_decisions", "uniq_propagations", "uniq_pure_literals",
+    "uniq_backtracks", "uniq_solver_time", "uniq_runtime",
 )
 
 # Cột định danh được ghép vào đầu mỗi dòng của file trace chi tiết
@@ -175,6 +175,7 @@ def uniqueness_metrics(result: UniquenessResult, runtime: float) -> dict[str, An
         "uniq_sat_calls": result.sat_calls,
         "uniq_decisions": result.stats.decisions,
         "uniq_propagations": result.stats.propagations,
+        "uniq_pure_literals": result.stats.pure_literals,
         "uniq_backtracks": result.stats.backtracks,
         "uniq_solver_time": result.stats.runtime,
         "uniq_runtime": runtime,
