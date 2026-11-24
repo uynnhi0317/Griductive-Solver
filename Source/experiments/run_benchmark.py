@@ -231,7 +231,7 @@ def _write_csv(path: Path, fields: Sequence[str], rows: Iterable[dict[str, Any]]
 
 
 def _step_fields(steps: Sequence[dict[str, Any]]) -> list[str]:
-    """Cột của file steps: cột định danh trước, sau đó khoá của TraceStep.as_dict theo thứ tự xuất hiện"""
+    """Cột của file steps: cột định danh trước, sau đó khoá do step_rows sinh ra theo thứ tự xuất hiện"""
     fields = list(STEP_ID_FIELDS)
     seen = set(fields)
     for step in steps:

@@ -4,7 +4,7 @@ Thu thập số liệu thực nghiệm cho một lần chạy hệ thống trên
 Các nhóm số liệu:
 + Mã hoá: số biến chính, biến phụ, mệnh đề
     - full_*: CNF của toàn bộ clue (kể cả thẻ úp) + status thẻ mở sẵn, lấy từ uniqueness check
-    - kb0_* / kb_final_*: KB_t lúc bắt đầu và lúc agent dừng, dựng lại bằng build_kb từ PublicState
+    - kb0_clauses / kb_final_*: KB_t lúc bắt đầu và lúc agent dừng, dựng lại bằng build_kb từ PublicState
 + SAT: số lần gọi solver của agent, của engine (phán xử verdict) và tổng
 + Solver: decisions, propagations, pure literals, backtracks, thời gian trong solver
   (cộng dồn mọi truy vấn của agent và engine trong vòng suy diễn)
