@@ -100,8 +100,14 @@ def run_puzzle(path: Path, reuse_models: bool, run: int, time_limit: float | Non
     row["puzzle_id"] = puzzle.puzzle_id
     row["size"] = puzzle.board.size
 
-    _run_uniqueness(puzzle, row, time_limit)
-    return _run_deduction(puzzle, row, reuse_models, time_limit)
+    # Lưới an toàn cuối cùng cho lỗi nằm ngoài các vùng đã bắt riêng
+    try:
+        _run_uniqueness(puzzle, row, time_limit)
+        return _run_deduction(puzzle, row, reuse_models, time_limit)
+    except Exception as exc:
+        row["status"] = ERROR
+        _add_error(row, "harness", exc)
+        return RunResult(row)
 
 
 def _run_uniqueness(puzzle: PuzzleFull, row: dict[str, Any], time_limit: float | None) -> None:
@@ -134,18 +140,33 @@ def _run_deduction(puzzle: PuzzleFull, row: dict[str, Any], reuse_models: bool,
     except Exception as exc:
         failure = exc
 
-    trace = agent.trace     # trace đầy đủ, hoặc dở dang nếu có lỗi
-    row.update(deduction_metrics(trace, engine))
     row["runtime"] = stopwatch.elapsed
-    row.update(kb_metrics(puzzle.initial_state(), engine.state))
-    row["verdicts_correct"] = verdicts_correct(puzzle, engine.state)
-    if failure is not None:
-        row["status"] = ERROR
+    failed = failure is not None
+    if failed:
         _add_error(row, "deduction", failure)
+
+    trace = agent.trace     # trace đầy đủ, hoặc dở dang nếu có lỗi
+    try:
+        row.update(deduction_metrics(trace, engine))
+        row.update(kb_metrics(puzzle.initial_state(), engine.state))
+        row["verdicts_correct"] = verdicts_correct(puzzle, engine.state)
+    except Exception as exc:
+        failed = True
+        _add_error(row, "metrics", exc)
+    if failed:
+        # Ghi đè status của trace (hoặc đặt mới nếu deduction_metrics chưa kịp ghi)
+        row["status"] = ERROR
 
     id_columns = {key: row[key] for key in STEP_ID_FIELDS}
     steps = [{**id_columns, **step} for step in step_rows(trace)]
-    return RunResult(row, steps, trace.to_text(puzzle.board))
+
+    # Trace văn bản chỉ là đầu ra phụ: lỗi ở đây được ghi vào cột error nhưng không đổi status
+    try:
+        trace_text = trace.to_text(puzzle.board)
+    except Exception as exc:
+        trace_text = None
+        _add_error(row, "trace", exc)
+    return RunResult(row, steps, trace_text)
 
 
 # Chạy cả bộ puzzle

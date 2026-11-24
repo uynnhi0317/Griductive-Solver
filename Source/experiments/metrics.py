@@ -54,6 +54,14 @@ SUMMARY_FIELDS: tuple[str, ...] = (
 # Cột định danh được ghép vào đầu mỗi dòng của file trace chi tiết
 STEP_ID_FIELDS: tuple[str, ...] = ("puzzle_id", "size", "model_reuse", "run")
 
+STEP_STAT_COLUMNS: dict[str, str] = {
+    "decisions": "agent_decisions",
+    "propagations": "agent_propagations",
+    "pure_literals": "agent_pure_literals",
+    "backtracks": "agent_backtracks",
+    "runtime": "agent_solver_time",
+}
+
 
 @dataclass
 class Stopwatch:
@@ -149,9 +157,13 @@ def verdicts_correct(puzzle: PuzzleFull, state: PublicState) -> bool:
 
 
 def step_rows(trace: DeductionTrace) -> Iterator[dict[str, Any]]:
-    """Từng bước của trace dưới dạng dict"""
+    """
+    Từng bước của trace dưới dạng dict, số liệu solver đổi tên theo STEP_STAT_COLUMNS
+    Tổng các bước không bằng cột cùng loại ở summary: summary còn cộng truy vấn của engine
+    và lần phân loại cuối của agent (không tạo TraceStep)
+    """
     for step in trace.steps:
-        yield step.as_dict()
+        yield {STEP_STAT_COLUMNS.get(key, key): value for key, value in step.as_dict().items()}
 
 
 # Uniqueness check
