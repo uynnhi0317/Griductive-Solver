@@ -50,22 +50,22 @@ def _subject_cells(clue: Clue) -> list[Cell]:
 
 
 def highlight_roles(clue: Clue, board: Board) -> dict[Cell, Role]:
-    """Các ô cần highlight khi clue được chọn, kèm vai trò"""
+    """Các ô cần highlight khi clue được chọn, kèm vai trò. Mỗi loại clue đi đúng một nhánh."""
+    roles: dict[Cell, Role] = {}
+
     custom = getattr(clue, "highlight_layers", None)
     if callable(custom):
-        roles: dict[Cell, Role] = {}
         _merge(roles, custom(board))
         return roles
 
-    roles = {}
+    nested = getattr(clue, "then_clue", None)
+    if isinstance(nested, Clue):                           # IF_THEN
+        _add(roles, clue.cell, Role.CONDITION)             # vế "nếu"
+        _merge(roles, highlight_roles(nested, board))      # vế "thì" tô như clue thường
+        return roles
+
     for cell in clue.referenced_cells(board):
         _add(roles, cell, Role.COUNTED)
     for cell in _subject_cells(clue):
         _add(roles, cell, Role.SUBJECT)
-
-    nested = getattr(clue, "then_clue", None)
-    if isinstance(nested, Clue):
-        roles = {}
-        _add(roles, clue.cell, Role.CONDITION)             # vế "nếu"
-        _merge(roles, highlight_roles(nested, board))      # vế "thì"
     return roles
