@@ -49,6 +49,7 @@ class App:
         self.toasts = ToastManager()
         self.actionbar = ActionBar(
             on_verdict=self._verdict,
+            on_verdict_blocked=self._warn_select_first,
             on_hint=lambda: self._stub("Hint"),
             on_auto_solve=lambda: self._stub("Auto Solve"),
             on_restart=self._restart,
@@ -179,12 +180,16 @@ class App:
     def _who(self, cell: Cell) -> str:
         return f"{cell.label} {self.state.board.character_at(cell).name}"
 
+    def _warn_select_first(self) -> None:
+        """Người chơi gọi verdict khi chưa có thẻ úp nào được chọn (bấm nút xám hoặc phím C / I)"""
+        msg = "Select a face-down card first."
+        self._say(msg, Level.WARN)
+        self.toasts.show(msg, Level.WARN)
+
     def _verdict(self, status: Status) -> None:
         """Người chơi gọi ô đang chọn là status; engine quyết định bằng entailment trên PublicState"""
         if not self._can_call():
-            msg = "Select a face-down card first."
-            self._say(msg, Level.WARN)
-            self.toasts.show(msg, Level.WARN)
+            self._warn_select_first()
             return
         cell = self.selected
         try:

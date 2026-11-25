@@ -22,9 +22,11 @@ class Button(Component):
     xám đi và không bấm được khi enabled = False.
     """
 
-    def __init__(self, label: str, on_click: Callable[[], None], status: Status | None = None):
+    def __init__(self, label: str, on_click: Callable[[], None], status: Status | None = None,
+                 on_disabled_click: Callable[[], None] | None = None):
         self.label = label
         self.on_click = on_click
+        self.on_disabled_click = on_disabled_click
         self.status = status
         self.rect = pygame.Rect(0, 0, 0, 0)
         self.enabled = True
@@ -51,8 +53,11 @@ class Button(Component):
                 return True
         elif e.type == pygame.MOUSEBUTTONUP and e.button == 1 and self._pressed:
             self._pressed = False
-            if self.enabled and self.rect.collidepoint(e.pos):
-                self.on_click()
+            if self.rect.collidepoint(e.pos):
+                if self.enabled:
+                    self.on_click()
+                elif self.on_disabled_click is not None:
+                    self.on_disabled_click()
             return True
         return False
 

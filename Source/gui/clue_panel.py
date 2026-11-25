@@ -28,7 +28,7 @@ class _Row:
     name: str
     status: Status
     text: str
-    lines: list[str] = None  # sau khi layout
+    lines: list[str] | None = None  # sau khi layout
     top: int = 0             # toạ độ y trong không gian nội dung (chưa trừ scroll)
     height: int = 0
 

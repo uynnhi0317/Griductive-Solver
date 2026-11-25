@@ -94,10 +94,13 @@ class StatusBar(Component):
 class ActionBar(Component):
     """Hàng nút dưới bàn cờ: phán quyết (trái), Hint / Auto Solve / Restart / Load (phải)"""
 
-    def __init__(self, on_verdict: Callable[[Status], None], on_hint, on_auto_solve, on_restart, on_load):
+    def __init__(self, on_verdict: Callable[[Status], None], on_verdict_blocked: Callable[[], None],
+                 on_hint, on_auto_solve, on_restart, on_load):
         self.rect = pygame.Rect(0, 0, 0, 0)
-        self.criminal = Button("Criminal", lambda: on_verdict(Status.CRIMINAL), Status.CRIMINAL)
-        self.innocent = Button("Innocent", lambda: on_verdict(Status.INNOCENT), Status.INNOCENT)
+        self.criminal = Button("Criminal", lambda: on_verdict(Status.CRIMINAL), Status.CRIMINAL,
+                               on_disabled_click=on_verdict_blocked)
+        self.innocent = Button("Innocent", lambda: on_verdict(Status.INNOCENT), Status.INNOCENT,
+                               on_disabled_click=on_verdict_blocked)
         self._left = [self.criminal, self.innocent]
         self._right = [Button("Hint", on_hint), Button("Auto Solve", on_auto_solve),
                        Button("Restart", on_restart), Button("Load", on_load)]
