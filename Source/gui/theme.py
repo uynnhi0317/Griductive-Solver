@@ -196,6 +196,8 @@ def clear_caches() -> None:
     get_font.cache_clear()
     
 # ---------------------------------------------------------------- drawing
+SCROLLBAR_W = 6
+
 def draw_rect_alpha(surface, color, rect, radius=0):
     shape = pygame.Surface(pygame.Rect(rect).size, pygame.SRCALPHA)
     pygame.draw.rect(shape, color, shape.get_rect(), border_radius=radius)
@@ -217,3 +219,12 @@ def draw_status_icon(surface: pygame.Surface, status: Status, cx: int, cy: int, 
     else:
         pts = [(cx - d, cy + d * 0.05), (cx - d * 0.25, cy + d * 0.8), (cx + d, cy - d * 0.7)]
         pygame.draw.lines(surface, Color.text, False, pts, width)
+
+def draw_scrollbar(surface: pygame.Surface, vp: pygame.Rect, content_h: int, scroll: int, max_scroll: int) -> None:
+        if max_scroll <= 0:
+            return
+        track_h = vp.h
+        thumb_h = max(24, track_h * vp.h // content_h)
+        thumb_y = vp.y + (track_h - thumb_h) * scroll // max_scroll
+        thumb = pygame.Rect(vp.right - SCROLLBAR_W - Space.xs, thumb_y, SCROLLBAR_W, thumb_h)
+        draw_rect_alpha(surface, Color.scrollbar, thumb, Radius.small)

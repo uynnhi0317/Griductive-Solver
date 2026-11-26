@@ -24,8 +24,8 @@ from game.board import Board
 from solver.stats import SolverStats
 from .component import Component
 from .theme import (
-    Color, Radius, Size, Space, Stroke,
-    draw_rect_alpha, get_font, render_text,
+    Color, Radius, Size, Space, SCROLLBAR_W,
+    get_font, render_text, draw_scrollbar
 )
 
 if TYPE_CHECKING:
@@ -34,7 +34,6 @@ if TYPE_CHECKING:
 PAD = Space.md
 ROW_H = 28
 ROW_GAP = Space.xs
-SCROLLBAR_W = 6
 WHEEL_STEP = 48
 SECTION_GAP = Space.lg
 
@@ -54,8 +53,8 @@ def _fmt(n: int | float, decimals: int = 0) -> str:
 
 class StatsPanel(Component):
     """
-    Displays solver statistics aggregated from engine.history.
-    Accepts a fresh history tuple on every refresh().
+    Hiển thị thống kê của bộ giải được tổng hợp từ engine.history.
+    Nhận một tuple history mới mỗi khi refresh() được gọi.
     """
 
     def __init__(self, board: Board,
@@ -65,7 +64,7 @@ class StatsPanel(Component):
         self.area = pygame.Rect(area)
         self.scroll = 0
         self._content_h = 0
-        self._rows: list[dict] = []          # pre-computed display rows
+        self._rows: list[dict] = []
         self._totals: SolverStats = SolverStats()
         self._total_sat: int = 0
         self.refresh(history)
@@ -76,7 +75,7 @@ class StatsPanel(Component):
         self._recalc_content_h()
 
     def _recalc_content_h(self) -> None:
-        """Estimate total content height for scrollbar."""
+        """Ước tính tổng chiều cao nội dung để xác định kích thước scrollbar."""
         n = len(self._rows)
         # header + rows + totals row + gap + summary block
         self._content_h = (ROW_H          # column header
@@ -96,7 +95,7 @@ class StatsPanel(Component):
 
     # --------------------------------------------------------------- update
     def refresh(self, history: tuple[VerdictResult, ...]) -> None:
-        """Rebuild display rows from engine history."""
+        """Xây dựng lại các hàng dữ liệu hiển thị từ lịch sử của engine."""
         rows = []
         totals = SolverStats()
         total_sat = 0
@@ -106,7 +105,7 @@ class StatsPanel(Component):
             accepted = r.outcome is VerdictOutcome.ACCEPTED
             if accepted:
                 step += 1
-            # aggregate stats from all SatQuerys in this verdict
+            # tổng hợp thống kê từ tất cả SatQuery trong kết quả phán định này
             q_stats = SolverStats()
             for q in r.queries:
                 q_stats.merge(q.stats)
@@ -171,12 +170,12 @@ class StatsPanel(Component):
         y = self._draw_summary(surface, x0, content_w, y, vp)
 
         surface.set_clip(old_clip)
-        self._draw_scrollbar(surface, vp)
+        draw_scrollbar(surface, vp, self._content_h, self.scroll, self._max_scroll)
 
     # ---------------------------------------------------------------- helpers
     def _cols(self, x0: int, w: int) -> list[tuple[str, int, str]]:
-        """(label, x, align) for each column given the available width."""
-        # fixed columns then stretch 'who'
+        """(nhãn, tọa độ x, căn lề) cho từng cột dựa trên chiều rộng khả dụng."""
+        # Các cột có chiều rộng cố định trước, sau đó phân bổ phần chiều rộng còn lại cho cột 'who'
         fixed = _COL_STEP + _COL_VERDICT + _COL_SAT + _COL_DEC + _COL_PROP
         who_w = max(60, w - fixed)
         cols = [
@@ -210,7 +209,7 @@ class StatsPanel(Component):
         bg = Color.surface_2 if row["accepted"] else Color.surface_1
         pygame.draw.rect(surface, bg, rect, border_radius=Radius.control)
         if not row["accepted"]:
-            # dim text for rejected verdicts
+            # làm mờ màu chữ đối với các kết quả phán định bị từ chối
             pass
 
         cols = self._cols(x0, w)
@@ -233,7 +232,7 @@ class StatsPanel(Component):
         return y + ROW_H + ROW_GAP
 
     def _draw_totals(self, surface, x0, w, y) -> int:
-        # divider above totals
+        # divider bên trên totals
         pygame.draw.line(surface, Color.border,
                          (x0, y), (x0 + w, y))
         y += ROW_GAP
@@ -262,7 +261,7 @@ class StatsPanel(Component):
         return y + ROW_H
 
     def _draw_summary(self, surface, x0, w, y, vp) -> int:
-        """Render the cumulative solver stats block."""
+        """Hiển thị khối thống kê tổng hợp của bộ giải."""
         t = self._totals
         lines = [
             ("SAT queries (total)",     str(self._total_sat)),
@@ -282,13 +281,3 @@ class StatsPanel(Component):
                 surface.blit(vtxt, vtxt.get_rect(midright=(x0 + w, y + ROW_H // 2)))
             y += ROW_H + ROW_GAP
         return y
-
-    def _draw_scrollbar(self, surface, vp):
-        if self._max_scroll <= 0:
-            return
-        track_h = vp.h
-        thumb_h = max(24, track_h * vp.h // max(1, self._content_h))
-        thumb_y = vp.y + (track_h - thumb_h) * self.scroll // self._max_scroll
-        thumb = pygame.Rect(vp.right - SCROLLBAR_W - Space.xs,
-                            thumb_y, SCROLLBAR_W, thumb_h)
-        draw_rect_alpha(surface, Color.scrollbar, thumb, Radius.small)

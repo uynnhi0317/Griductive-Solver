@@ -21,11 +21,10 @@ import pygame
 
 from engine.game_engine import VerdictOutcome
 from game.board import Board
-from game.cell import Cell
 from .component import Component
 from .theme import (
-    Color, Radius, Size, Space, Stroke, STATUS_COLOR,
-    draw_rect_alpha, get_font, render_text, wrap_text,
+    Color, Radius, Size, Space, STATUS_COLOR, SCROLLBAR_W,
+    get_font, render_text, draw_scrollbar
 )
 
 if TYPE_CHECKING:
@@ -34,25 +33,24 @@ if TYPE_CHECKING:
 PAD = Space.md
 ROW_PAD = Space.sm
 ROW_GAP = Space.xs
-SCROLLBAR_W = 6
 WHEEL_STEP = 48
 STEP_DOT_R = 6
 
 
 @dataclass
 class _TraceRow:
-    step: int            # 1-based step number (accepted verdicts only)
+    step: int
     label: str           # e.g. "A1  Alice  → Criminal  (2 SAT)"
-    outcome_color: tuple # colour of the left accent stripe
+    outcome_color: tuple
     top: int = 0
     height: int = 0
 
 
 class TracePanel(Component):
     """
-    Scrollable list of accepted verdicts drawn from engine.history.
-    Rejected attempts (NOT_PROVABLE / CONTRADICTED) are shown as small
-    inline notes so the player can see what they tried.
+    Danh sách cuộn được, hiển thị các kết quả phán định được chấp nhận từ engine.history.
+    Các lần thử bị từ chối (NOT_PROVABLE / CONTRADICTED) được hiển thị dưới dạng
+    ghi chú nhỏ ngay trong danh sách để người chơi có thể theo dõi những gì họ đã thử.
     """
 
     def __init__(self, board: Board, history: tuple[VerdictResult, ...],
@@ -151,7 +149,7 @@ class TracePanel(Component):
                                            row.height))
 
         surface.set_clip(old_clip)
-        self._draw_scrollbar(surface, vp)
+        draw_scrollbar(surface, vp, self._content_h, self.scroll, self._max_scroll)
 
     def _draw_row(self, surface: pygame.Surface, row: _TraceRow,
                   rect: pygame.Rect) -> None:
@@ -174,14 +172,3 @@ class TracePanel(Component):
             label = label.rstrip() + "…"
         txt = render_text(label, Size.body, Color.text)
         surface.blit(txt, txt.get_rect(midleft=(txt_x, rect.centery)))
-
-    def _draw_scrollbar(self, surface: pygame.Surface,
-                        vp: pygame.Rect) -> None:
-        if self._max_scroll <= 0:
-            return
-        track_h = vp.h
-        thumb_h = max(24, track_h * vp.h // self._content_h)
-        thumb_y = vp.y + (track_h - thumb_h) * self.scroll // self._max_scroll
-        thumb = pygame.Rect(vp.right - SCROLLBAR_W - Space.xs,
-                            thumb_y, SCROLLBAR_W, thumb_h)
-        draw_rect_alpha(surface, Color.scrollbar, thumb, Radius.small)

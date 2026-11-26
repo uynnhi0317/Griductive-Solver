@@ -110,9 +110,6 @@ class ActionBar(Component):
                                on_disabled_click=on_verdict_blocked)
         self.innocent = Button("Innocent", lambda: on_verdict(Status.INNOCENT), Status.INNOCENT,
                                on_disabled_click=on_verdict_blocked)
-        self._left = [self.criminal, self.innocent]
-        self._right = [Button("Hint", on_hint), Button("Auto Solve", on_auto_solve),
-                       Button("Restart", on_restart), Button("Load", on_load)]
         self.hint = Button("Hint", on_hint)
         self.auto = Button("Auto Solve", on_auto_solve, width_hint="Auto Solve")
         self._left = [self.criminal, self.innocent]
