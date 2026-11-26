@@ -6,13 +6,42 @@ Overlay modal toàn cửa sổ: hướng dẫn điều khiển (lần chạy đ�
 + peek_stage chỉ lấy hai trường title / size từ file puzzle, không dựng PuzzleFull
 """
 
+import json
 import math
-from typing import Callable
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Callable, Sequence
 
 import pygame
 
 from .component import Component
 from .theme import Color, Radius, Size, Space, Stroke, draw_rect_alpha, ellipsize, get_font, render_text
+from .widgets import BUTTON_H, Button
+
+
+@dataclass(frozen=True)
+class StageInfo:
+    path: Path
+    title: str
+    size: int | None            # None nếu không đọc được
+    error: str | None = None
+
+    @property
+    def ok(self) -> bool:
+        return self.error is None
+
+
+def peek_stage(path: Path) -> StageInfo:
+    """Chỉ giữ lại title và size của file puzzle; file hỏng thì trả StageInfo có error"""
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        size = data["size"]
+        if isinstance(size, bool) or not isinstance(size, int) or size <= 0:
+            raise ValueError(f"size = {size!r}")
+        return StageInfo(path, str(data.get("title") or data.get("id") or path.stem), size)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        return StageInfo(path, path.stem, None, f"Cannot read this file ({type(exc).__name__})")
 
 
 def _mix(a: tuple, b: tuple, t: float) -> tuple[int, int, int, int]:
@@ -48,6 +77,7 @@ _GUIDE_ROWS = (
     ("A", "Auto Solve / Stop"),
     ("Esc", "Deselect, or stop Auto Solve"),
     ("PgUp / PgDn", "Previous / next stage"),
+    ("L", "Load a stage"),
     ("F1", "Show this guide"),
 )
 _ROW_H = 34
@@ -110,3 +140,104 @@ class GuideOverlay(Overlay):
         color = _mix(Color.text_dim, Color.text, round(phase * 10) / 10)   # lượng tử hoá để cache chữ không phình
         foot = render_text(self.footer, Size.h2, color, True)
         surface.blit(foot, foot.get_rect(center=(p.centerx, y + _FOOTER_H // 2 + Space.sm)))
+
+
+# ------------------------------------------------------------------ load
+class LoadOverlay(Overlay):
+    NAV = 44
+    BTN_W = 104
+    HEIGHT = 270
+
+    def __init__(self, on_apply: Callable[[int], None], on_cancel: Callable[[], None]) -> None:
+        super().__init__()
+        self._on_apply, self._on_cancel = on_apply, on_cancel
+        self.stages: list[StageInfo] = []
+        self.index = 0
+        self.current: int | None = None      # màn đang chơi
+        self.prev = Button("<", lambda: self._step(-1))
+        self.next = Button(">", lambda: self._step(1))
+        self.apply = Button("Apply", self._apply)
+        self.cancel = Button("Cancel", on_cancel)
+
+    @property
+    def buttons(self) -> tuple[Button, ...]:
+        return self.prev, self.next, self.apply, self.cancel
+
+    def open(self, stages: Sequence[StageInfo], index: int, current: int | None) -> None:
+        self.stages = list(stages)
+        self.index = index % len(self.stages)
+        self.current = current
+        self.prev.enabled = self.next.enabled = len(self.stages) > 1
+        self._sync()
+
+    def _step(self, delta: int) -> None:
+        self.index = (self.index + delta) % len(self.stages)
+        self._sync()
+
+    def _sync(self) -> None:
+        """Apply chỉ bấm được khi file đọc được và không phải màn đang chơi"""
+        self.apply.enabled = self.stages[self.index].ok and self.index != self.current
+
+    def _apply(self) -> None:
+        self._on_apply(self.index)
+
+    def _layout(self) -> None:
+        pw = min(560, self.rect.w - 2 * Space.xl)
+        self.panel = pygame.Rect(0, 0, pw, self.HEIGHT)
+        self.panel.center = self.rect.center
+        p, n = self.panel, self.NAV
+        cy = p.y + 125
+        self.prev.rect = pygame.Rect(p.x + Space.xl, cy - n // 2, n, n)
+        self.next.rect = pygame.Rect(p.right - Space.xl - n, cy - n // 2, n, n)
+        by = p.bottom - Space.xl - BUTTON_H
+        self.cancel.rect = pygame.Rect(p.right - Space.xl - self.BTN_W, by, self.BTN_W, BUTTON_H)
+        self.apply.rect = pygame.Rect(self.cancel.rect.x - Space.sm - self.BTN_W, by, self.BTN_W, BUTTON_H)
+
+    def handle_event(self, e: pygame.event.Event) -> bool:
+        if e.type == pygame.KEYDOWN:
+            if e.key == pygame.K_LEFT:
+                self._step(-1)
+            elif e.key == pygame.K_RIGHT:
+                self._step(1)
+            elif e.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                if self.apply.enabled:
+                    self._apply()
+            elif e.key == pygame.K_ESCAPE:
+                self._on_cancel()
+            return True
+        for b in self.buttons:          # không dùng any(): mọi nút phải thấy sự kiện để cập nhật hover
+            b.handle_event(e)
+        return True
+
+    def draw(self, surface: pygame.Surface) -> None:
+        self._draw_panel(surface)
+        p = self.panel
+        title = render_text("Load stage", Size.title, Color.text, True)
+        surface.blit(title, (p.x + Space.xl, p.y + Space.xl))
+        count = render_text(f"{self.index + 1} / {len(self.stages)}", Size.body, Color.text_dim)
+        surface.blit(count, count.get_rect(midright=(p.right - Space.xl, p.y + Space.xl + title.get_height() // 2)))
+
+        info = self.stages[self.index]
+        cx, cy = p.centerx, self.prev.rect.centery
+        max_w = self.next.rect.x - self.prev.rect.right - 2 * Space.md
+        size_txt = f"{info.size}x{info.size}" if info.size else "?"
+        line = ellipsize(f"Stage {self.index + 1:02d}: {info.title} ({size_txt})", get_font(Size.h2, True), max_w)
+        main = render_text(line, Size.h2, Color.text, True)
+        surface.blit(main, main.get_rect(center=(cx, cy - 14)))
+        name = render_text(ellipsize(info.path.name, get_font(Size.caption), max_w), Size.caption, Color.text_dim)
+        surface.blit(name, name.get_rect(center=(cx, cy + 12)))
+
+        note, color = None, Color.text
+        if not info.ok:
+            note, color = info.error, Color.fb_error
+        elif self.index == self.current:
+            note, color = "Currently playing", Color.fb_info
+        if note:
+            n = render_text(ellipsize(note, get_font(Size.body), max_w), Size.body, color)
+            surface.blit(n, n.get_rect(center=(cx, cy + 36)))
+
+        hint = ellipsize("Left / Right: browse   Enter: apply   Esc: cancel", get_font(Size.caption), p.w - 2 * Space.xl)
+        h = render_text(hint, Size.caption, Color.text_dim)
+        surface.blit(h, h.get_rect(center=(cx, self.apply.rect.y - Space.md - 7)))
+        for b in self.buttons:
+            b.draw(surface)

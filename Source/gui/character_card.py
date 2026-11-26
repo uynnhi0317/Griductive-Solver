@@ -11,7 +11,7 @@ from .theme import (
     draw_rect_alpha, draw_status_icon, fit_line, fit_wrapped, get_font,
 )
 
-COMPACT_PX = 160        # thẻ nhỏ hơn ngưỡng này chỉ hiện huy hiệu + tên
+COMPACT_PX = 110        # thẻ nhỏ hơn ngưỡng này chỉ hiện huy hiệu + tên
 SHAKE_DUR = 0.35
 SHAKE_WAVES = 3
 SHAKE_MIN_PX = 3

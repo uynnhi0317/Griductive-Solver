@@ -127,7 +127,7 @@ class CluePanel(Component):
         a = self.area
         pygame.draw.rect(surface, Color.surface_1, a, border_radius=Radius.card)
 
-        title = render_text(f"Clues ({len(self._rows)})", Size.title, Color.text, True)
+        title = render_text(f"Clues ({len(self._rows)})", Size.h2, Color.text, True)
         surface.blit(title, (a.x + PAD, a.y + (HEADER_H - title.get_height()) // 2 + 2))
 
         vp = self.viewport

@@ -8,8 +8,7 @@ from game.public_state import PublicState
 from solver.dpll import SolverTimeout
 from .board_view import BoardView
 from .chrome import ActionBar, StatusBar, TopBar
-from .dialogs import DialogUnavailable, ask_puzzle_path
-from .overlays import GuideOverlay, Overlay
+from .overlays import GuideOverlay, LoadOverlay, Overlay, peek_stage
 from .highlight import highlight_roles
 from .layout import MIN_WINDOW, compute_layout
 from .sidebar import Sidebar
@@ -59,10 +58,11 @@ class App:
             on_hint=self._hint,
             on_auto_solve=self._toggle_auto,
             on_restart=self._restart,
-            on_load=self._load,
+            on_load=self._open_load
         )
         self.overlay: Overlay | None = None
         self.guide = GuideOverlay(self._close_overlay)
+        self.loader = LoadOverlay(self._apply_load, self._close_overlay)
 
         self.stages = discover_puzzles(self.puzzle_root)
         if not self.stages:
@@ -91,6 +91,7 @@ class App:
         self.panel.fit(lay.sidebar)
         screen = self.screen.get_rect()
         self.guide.fit(screen)
+        self.loader.fit(screen)
 
     def _event_order(self):
         return (self.topbar, self.actionbar, self.statusbar, self.panel, self.board)
@@ -160,22 +161,6 @@ class App:
             self._say(f"Loaded {self.engine.title or self.engine.puzzle_id}.", Level.OK)
         else:
             self._fail(f"Could not load {self.stages[target].name} (see console).")
-
-    def _load(self) -> None:
-        """Nút Load: chọn một file puzzle JSON bất kỳ"""
-        try:
-            path = ask_puzzle_path(self.puzzle_root)
-        except DialogUnavailable as exc:
-            self._fail(f"Cannot open the file dialog: {exc}")
-            return
-        if path is None:
-            return                          # người dùng bấm Cancel
-        index = next((i for i, stage in enumerate(self.stages) if stage.resolve() == path.resolve()), None)
-        if self._open_puzzle(path, index):
-            self.toasts.clear()
-            self._say(f"Loaded {self.engine.title or self.engine.puzzle_id}.", Level.OK)
-        else:
-            self._fail(f"Could not load {path.name} (see console).")
 
     def _restart(self) -> None:
         self._stop_auto()
@@ -256,6 +241,22 @@ class App:
 
     def _close_overlay(self) -> None:
         self.overlay = None
+
+    def _open_load(self) -> None:
+        """Nút Load / phím L: mở overlay chọn màn (chỉ đọc title và size của từng file)"""
+        if self.auto_running:
+            self._toggle_auto()
+        infos = [peek_stage(path) for path in self.stages]
+        self.loader.open(infos, self.stage_index or 0, self.stage_index)
+        self.overlay = self.loader
+
+    def _apply_load(self, index: int) -> None:
+        self.overlay = None
+        if self._load_stage(index):
+            self.toasts.clear()
+            self._say(f"Loaded {self.engine.title or self.engine.puzzle_id}.", Level.OK)
+        else:
+            self._fail(f"Could not load {self.stages[index].name} (see console).")
 
     # ______________________________________________________________hint
     def _hint(self) -> None:
@@ -409,6 +410,8 @@ class App:
             self._nav(1)
         elif e.key == pygame.K_F1:
             self._show_guide()
+        elif e.key == pygame.K_l:
+            self._open_load()
         else:
             return False
         return True
