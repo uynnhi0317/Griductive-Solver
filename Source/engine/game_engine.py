@@ -80,7 +80,8 @@ class GameEngine:
     + submit_verdict: phán xử verdict bằng entailment trên PublicState hiện tại
     + restart: quay về state ban đầu (chỉ các thẻ mở sẵn)
     + time_limit: giới hạn giây cho mỗi SAT query (None hoặc số > 0);
-      SolverTimeout được để nguyên cho tầng trên xử lý, khi đó state và history không đổi
+      EntailmentTimeout (lớp con của SolverTimeout) được để nguyên cho tầng trên xử lý,
+      khi đó state và history không đổi
     """
 
     def __init__(self, puzzle: PuzzleFull, time_limit: float | None = None) -> None:

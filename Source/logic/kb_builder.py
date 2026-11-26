@@ -7,6 +7,8 @@ Dựng cơ sở tri thức tại bước suy diễn t:
 + Mỗi lần build tạo VariableMap mới nên đánh số biến luôn xác định
   (biến chính 1..N*N theo row-major, biến phụ nếu có được cấp sau, theo thứ tự lật thẻ)
 + Clue được mã hóa theo thứ tự lật, sau đó mới thêm các unit clause verdict
++ encode_kb là hàm mã hóa cấp thấp, KHÔNG tự đảm bảo ranh giới thông tin:
+  KB_t luôn phải dựng bằng build_kb; encode_kb chỉ được gọi với tập con clue đã lộ (vd. Hint)
 """
 
 from dataclasses import dataclass
@@ -58,10 +60,18 @@ def build_kb(state: PublicState) -> KnowledgeBase:
 def encode_kb(board: Board, clues: Iterable[Clue], verdicts: Mapping[Cell, Status],
               clue_ids: tuple[str, ...] = ()) -> KnowledgeBase:
     """
-    Mã hóa KB từ một tập clue và verdict bất kỳ
+    Mã hóa KB từ một tập clue và verdict cho trước
     + build_kb dùng với toàn bộ clue đã lộ của PublicState
-    + Hint dùng với một phần clue để tìm tập clue tối thiểu
+    + Hint dùng với một phần clue đã lộ để tìm tập clue tối thiểu
+    + Nơi gọi tự chịu trách nhiệm KHÔNG truyền clue chưa lộ hay đáp án ẩn
     """
+    if not isinstance(board, Board):
+        raise TypeError(f"[KBBuilder]: board phải là Board, nhận được {type(board).__name__}")
+    if not isinstance(verdicts, Mapping):
+        raise TypeError(f"[KBBuilder]: verdicts phải là Mapping[Cell, Status], nhận được {type(verdicts).__name__}")
+    if clues is None:
+        raise TypeError("[KBBuilder]: clues phải là tập Clue, nhận được None")
+
     vmap = VariableMap(board)
     cnf = CNF()
 
@@ -83,3 +93,4 @@ def encode_kb(board: Board, clues: Iterable[Clue], verdicts: Mapping[Cell, Statu
         clue_clauses=clue_clauses,
         verdict_units=verdict_units,
     )
+    
