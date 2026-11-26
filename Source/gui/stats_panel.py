@@ -270,7 +270,7 @@ class StatsPanel(Component):
             ("Propagations",            str(t.propagations)),
             ("Pure literals",           str(t.pure_literals)),
             ("Backtracks",              str(t.backtracks)),
-            ("Runtime",                 f"{t.runtime * 1000:.1f} ms"),
+            ("Runtime",                 f"{t.runtime * 1000:.3f} ms"),
         ]
         label_font = get_font(Size.body)
         value_font = get_font(Size.body, True)

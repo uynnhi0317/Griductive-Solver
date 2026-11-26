@@ -86,7 +86,7 @@ class App:
         self.panel.fit(lay.sidebar)
 
     def _event_order(self):
-        return (self.topbar, self.actionbar, self.panel, self.board)
+        return (self.topbar, self.actionbar, self.statusbar, self.panel, self.board)
 
     def _draw_order(self):
         return (self.topbar, self.actionbar, self.statusbar, self.panel, self.board)
@@ -237,6 +237,7 @@ class App:
             self.toasts.show(f"CONTRADICTED: {who} is not {status.value}", Level.ERROR)
         else:   # INCONSISTENT
             self._fail("INCONSISTENT: the revealed clues contradict each other (puzzle or encoder bug).")
+        self.panel.refresh(self.state, self.engine.history)   # verdict bị từ chối cũng nằm trong history
         self._refresh_chrome()          # số SAT calls tăng kể cả khi bị từ chối
 
     # ______________________________________________________________hint
