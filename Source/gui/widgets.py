@@ -13,10 +13,6 @@ from .theme import (
 BUTTON_H = 36
 ICON_R = 9
 
-BUTTON_H = 36
-ICON_R = 9
-
-
 class Button(Component):
     """
     Nút bấm. handle_event trả True nếu đã nuốt sự kiện (nhấn / nhả chuột trên nút);
