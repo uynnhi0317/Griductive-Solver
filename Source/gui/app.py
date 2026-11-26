@@ -14,6 +14,8 @@ from .layout import MIN_WINDOW, compute_layout
 from .sidebar import Sidebar
 from .theme import Color, Level, clear_caches
 from .widgets import ToastManager
+from agent.logic_agent import AgentInvariantError, LogicAgent, find_hint
+from agent.trace import AgentStatus
 
 PUZZLE_ROOT = Path(__file__).resolve().parent.parent / "puzzles"
 RESCALE_WINDOW = 0.8
@@ -47,11 +49,14 @@ class App:
         self.topbar = TopBar(self.layout.top_bar, lambda: self._nav(-1), lambda: self._nav(1))
         self.statusbar = StatusBar(self.layout.status)
         self.toasts = ToastManager()
+        self.agent: LogicAgent | None = None
+        self.auto_running = False
+        self._auto_wait = 0.0
         self.actionbar = ActionBar(
             on_verdict=self._verdict,
             on_verdict_blocked=self._warn_select_first,
-            on_hint=lambda: self._stub("Hint"),
-            on_auto_solve=lambda: self._stub("Auto Solve"),
+            on_hint=self._hint,
+            on_auto_solve=self._toggle_auto,
             on_restart=self._restart,
             on_load=self._load,
         )
@@ -84,7 +89,7 @@ class App:
         return (self.topbar, self.actionbar, self.panel, self.board)
 
     def _draw_order(self):
-        return (self.board, self.panel, self.actionbar, self.topbar, self.statusbar, self.toasts)
+        return (self.topbar, self.actionbar, self.statusbar, self.panel, self.board)
 
     def _say(self, message: str, level: Level = Level.INFO) -> None:
         self.statusbar.say(message, level)
@@ -101,6 +106,8 @@ class App:
             print(f"[App] Không tải được puzzle {path.name}: {exc}")
             return False
         self.engine = engine
+        self.agent = None
+        self._stop_auto()
         self.stage_index = stage_index
         self.selected = None
         self.board = BoardView(engine.state, self.layout.board,
@@ -116,6 +123,7 @@ class App:
 
     def _sync_views(self) -> None:
         """Đẩy PublicState mới của engine xuống các view"""
+        self.board.set_hint(None)
         self.board.refresh(self.state)
         self.panel.refresh(self.state, self.engine.history)
         self._apply_selection()
@@ -132,8 +140,8 @@ class App:
         self.actionbar.set_verdict_enabled(self._can_call())
 
     def _can_call(self) -> bool:
-        return self.selected is not None and not self.state.is_known(self.selected)
-
+        return self.selected is not None and not self.state.is_known(self.selected) and not self.auto_running
+    
     # ______________________________________________________________actions
     def _nav(self, delta: int) -> None:
         if self.stage_index is None:        # đang ở file ngoài danh sách: tiến thì vào màn đầu, lùi thì vào màn cuối
@@ -163,15 +171,12 @@ class App:
             self._fail(f"Could not load {path.name} (see console).")
 
     def _restart(self) -> None:
+        self._stop_auto()
         self.engine.restart()
         self.selected = None
         self.toasts.clear()
         self._sync_views()
         self._say("Restarted.", Level.OK)
-
-    def _stub(self, name: str) -> None:
-        self._say(f"{name} is not implemented yet.", Level.INFO)
-        self.toasts.show(f"{name}: coming in a later phase", Level.INFO)
 
     def _fail(self, message: str) -> None:
         self._say(message, Level.ERROR)
@@ -182,7 +187,7 @@ class App:
 
     def _warn_select_first(self) -> None:
         """Người chơi gọi verdict khi chưa có thẻ úp nào được chọn (bấm nút xám hoặc phím C / I)"""
-        msg = "Select a face-down card first."
+        msg = "Auto Solve is running. Press Stop first." if self.auto_running else "Select a face-down card first."
         self._say(msg, Level.WARN)
         self.toasts.show(msg, Level.WARN)
 
@@ -234,10 +239,101 @@ class App:
             self._fail("INCONSISTENT: the revealed clues contradict each other (puzzle or encoder bug).")
         self._refresh_chrome()          # số SAT calls tăng kể cả khi bị từ chối
 
+    # ______________________________________________________________hint
+    def _hint(self) -> None:
+        if self.auto_running:
+            self._warn_select_first()
+            return
+        if self.engine.is_solved():
+            self._say("Nothing to hint: the puzzle is solved.")
+            return
+        try:
+            hint = find_hint(self.state, SAT_TIME_LIMIT)    # chỉ nhận PublicState, không đọc đáp án ẩn
+        except SolverTimeout:
+            self._fail(f"Solver timed out after {SAT_TIME_LIMIT:g}s; no hint.")
+            return
+        if hint is None:
+            self._say("No hint: no character is forced by the revealed clues. The solver will not guess.", Level.WARN)
+            self.toasts.show("No forced verdict available", Level.WARN)
+            return
+
+        support = [Cell.parse(label) for label in hint.clue_ids]
+        self.selected = support[0] if support else None     # thẻ mục tiêu còn úp nên không chọn được; chọn clue chứng minh
+        self._apply_selection()
+        self.board.set_hint(hint.cell)
+        self._refresh_chrome()
+
+        who = self._who(hint.cell)
+        if support:
+            owners = ", ".join(self._who(c) for c in support)
+            self._say(f"Hint: {who} can be proved. Relevant clues: {owners}.")
+        else:
+            self._say(f"Hint: {who} can be proved from the known verdicts alone.")
+        self.toasts.show(f"Hint: look at {who}", Level.INFO)
+
+    # ______________________________________________________________auto solve
+    def _toggle_auto(self) -> None:
+        if self.auto_running:
+            self._stop_auto()
+            self._refresh_chrome()
+            self._say("Auto Solve stopped.")
+            return
+        if self.engine.is_solved():
+            self._say("Nothing to solve: the puzzle is already solved.")
+            return
+        if self.agent is None:
+            self.agent = LogicAgent(self.engine, SAT_TIME_LIMIT)   # tự reset trace nếu state bị đổi từ ngoài
+        self.auto_running = True
+        self._auto_wait = 0.0           # bước đầu chạy ngay
+        self.board.set_hint(None)
+        self.actionbar.set_auto_running(True)
+        self._refresh_chrome()
+        self._say("Auto Solve running. Press Stop (or Esc) to interrupt.")
+
+    def _stop_auto(self) -> None:
+        self.auto_running = False
+        self.actionbar.set_auto_running(False)
+
+    def _auto_step(self) -> None:
+        self._auto_wait = self.statusbar.speed.value
+        try:
+            step = self.agent.step()
+        except (EngineInvariantError, AgentInvariantError) as exc:
+            print(f"[App] {exc}")
+            self._stop_auto()
+            self._refresh_chrome()
+            self._fail("Internal error during Auto Solve (encoder/solver bug), see console.")
+            return
+        if step is not None:
+            self.selected = step.cell       # chọn thẻ vừa giải: flip + highlight clue vừa lộ
+            self._sync_views()
+            self._say(f"Auto: {self._who(step.cell)} is {step.verdict.value} "
+                      f"(step {step.step}, {step.sat_queries + step.engine_queries} SAT queries).", Level.OK)
+        if self.agent.status.is_terminal:
+            self._auto_finish(self.agent.status)
+
+    def _auto_finish(self, status: AgentStatus) -> None:
+        self._stop_auto()
+        self._refresh_chrome()
+        trace = self.agent.trace
+        if status is AgentStatus.SOLVED:
+            self._say(f"Auto Solve finished: puzzle solved ({trace.num_steps} verdicts by the agent).", Level.OK)
+            self.toasts.show("Puzzle solved!", Level.OK)
+        elif status is AgentStatus.AMBIGUOUS:
+            n = len(trace.final_unknown)
+            self._say(f"Auto Solve stopped: {n} card(s) still UNKNOWN and none is forced. The agent will not guess.", Level.WARN)
+            self.toasts.show("Stuck: no forced verdict", Level.WARN)
+        elif status is AgentStatus.INCONSISTENT:
+            self._fail("INCONSISTENT: the revealed clues contradict each other (puzzle or encoder bug).")
+        else:   # TIMEOUT
+            self._fail(f"Solver timed out after {SAT_TIME_LIMIT:g}s; Auto Solve stopped.")
+
     # _____________________________________________________________selection
     def _select(self, cell: Cell | None, toggle: bool = False) -> None:
         """Chọn ô; toggle=True (click chuột): bấm lại ô đang chọn thì bỏ chọn"""
         self.selected = None if toggle and cell is not None and cell == self.selected else cell
+        if cell is not None and cell == self.board.hint:
+            self.board.set_hint(None)
         self._apply_selection()
         self._refresh_chrome()
         self._announce_selection()
@@ -280,8 +376,15 @@ class App:
             self._verdict(Status.CRIMINAL)
         elif e.key == pygame.K_i:
             self._verdict(Status.INNOCENT)
+        elif e.key == pygame.K_h:
+            self._hint()
+        elif e.key == pygame.K_a:
+            self._toggle_auto()
         elif e.key == pygame.K_ESCAPE:
-            self._select(None)
+            if self.auto_running:
+                self._toggle_auto()
+            else:
+                self._select(None)
         elif e.key == pygame.K_PAGEUP:
             self._nav(-1)
         elif e.key == pygame.K_PAGEDOWN:
@@ -310,6 +413,10 @@ class App:
     def update(self, dt: float) -> None:
         for component in (self.board, self.toasts):
             component.update(dt)
+        if self.auto_running:
+            self._auto_wait -= dt
+            if self._auto_wait <= 0:
+                self._auto_step()
 
     def draw(self) -> None:
         self.screen.fill(Color.bg)

@@ -26,7 +26,7 @@ class Button(Component):
     """
 
     def __init__(self, label: str, on_click: Callable[[], None], status: Status | None = None,
-                 on_disabled_click: Callable[[], None] | None = None):
+                 on_disabled_click: Callable[[], None] | None = None, width_hint: str | None = None):
         self.label = label
         self.on_click = on_click
         self.on_disabled_click = on_disabled_click
@@ -35,6 +35,7 @@ class Button(Component):
         self.enabled = True
         self.hovered = False
         self._pressed = False
+        self.width_hint = width_hint
 
     def fit(self, rect: pygame.Rect) -> None:
         self.rect = pygame.Rect(rect)
@@ -44,7 +45,9 @@ class Button(Component):
         return 2 * ICON_R + Space.sm if self.status is not None else 0
 
     def natural_width(self, pad: int) -> int:
-        return get_font(Size.body, True).size(self.label)[0] + self._icon_w + 2 * pad
+        font = get_font(Size.body, True)
+        label_w = max(font.size(t)[0] for t in (self.label, self.width_hint or self.label))
+        return label_w + self._icon_w + 2 * pad
 
     # ------------------------------------------------------------ events
     def handle_event(self, e: pygame.event.Event) -> bool:
@@ -117,6 +120,72 @@ def place_buttons(rect: pygame.Rect, left: Sequence[Button], right: Sequence[But
         b.rect = pygame.Rect(x, y, w, BUTTON_H)
         x -= gap
 
+# ------------------------------------------------------------------ slider
+SLIDER_TRACK_H = 4
+SLIDER_KNOB_R = 8
+
+
+class Slider(Component):
+    """Thanh trượt giá trị thực: nhãn bên trái, giá trị bên phải, kéo được ngoài vùng track khi đang giữ chuột."""
+
+    def __init__(self, label: str, lo: float, hi: float, value: float, step: float = 0.1,
+                 fmt: str = "{:.1f}s", on_change: Callable[[float], None] | None = None):
+        self.label, self.lo, self.hi, self.step, self.fmt = label, lo, hi, step, fmt
+        self._value = min(hi, max(lo, value))
+        self._on_change = on_change or (lambda v: None)
+        self.rect = pygame.Rect(0, 0, 0, 0)
+        self._track = pygame.Rect(0, 0, 1, SLIDER_TRACK_H)
+        self._drag = False
+
+    @property
+    def value(self) -> float:
+        return self._value
+
+    def fit(self, rect: pygame.Rect) -> None:
+        self.rect = pygame.Rect(rect)
+        label_w = render_text(self.label, Size.caption, Color.text_dim).get_width()
+        value_w = max(render_text(self.fmt.format(v), Size.caption, Color.text_dim).get_width()
+                      for v in (self.lo, self.hi))
+        x0 = rect.x + label_w + Space.md
+        x1 = rect.right - value_w - Space.md
+        self._track = pygame.Rect(x0, rect.centery - SLIDER_TRACK_H // 2, max(1, x1 - x0), SLIDER_TRACK_H)
+
+    def _hit_rect(self) -> pygame.Rect:
+        return self._track.inflate(2 * SLIDER_KNOB_R, 2 * SLIDER_KNOB_R + Space.sm)
+
+    def _set_from_x(self, x: int) -> None:
+        frac = min(1.0, max(0.0, (x - self._track.x) / self._track.w))
+        raw = self.lo + frac * (self.hi - self.lo)
+        value = round(min(self.hi, max(self.lo, round(raw / self.step) * self.step)), 6)
+        if value != self._value:
+            self._value = value
+            self._on_change(value)
+
+    def handle_event(self, e: pygame.event.Event) -> bool:
+        if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1 and self._hit_rect().collidepoint(e.pos):
+            self._drag = True
+            self._set_from_x(e.pos[0])
+            return True
+        if e.type == pygame.MOUSEMOTION and self._drag:
+            self._set_from_x(e.pos[0])      # MOUSEMOTION vẫn trả False theo hợp đồng Component
+        elif e.type == pygame.MOUSEBUTTONUP and e.button == 1 and self._drag:
+            self._drag = False
+            return True
+        return False
+
+    def draw(self, surface: pygame.Surface) -> None:
+        cy = self.rect.centery
+        lbl = render_text(self.label, Size.caption, Color.text_dim)
+        surface.blit(lbl, lbl.get_rect(midleft=(self.rect.x, cy)))
+        val = render_text(self.fmt.format(self._value), Size.caption, Color.text_dim)
+        surface.blit(val, val.get_rect(midright=(self.rect.right, cy)))
+
+        t = self._track
+        frac = (self._value - self.lo) / (self.hi - self.lo)
+        knob_x = t.x + round(frac * t.w)
+        pygame.draw.rect(surface, Color.surface_3, t, border_radius=Radius.small)
+        pygame.draw.rect(surface, Color.text_dim, (t.x, t.y, knob_x - t.x, t.h), border_radius=Radius.small)
+        pygame.draw.circle(surface, Color.focus, (knob_x, cy), SLIDER_KNOB_R)
 
 # ------------------------------------------------------------------ toasts
 TOAST_MAX = 3

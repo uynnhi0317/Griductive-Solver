@@ -7,7 +7,7 @@ import pygame
 from game.character import Status
 from .component import Component
 from .theme import Color, LEVEL_COLOR, Level, Size, Space, ellipsize, get_font, render_text
-from .widgets import Button, place_buttons
+from .widgets import Button, Slider, place_buttons
 
 NAV_W, NAV_H = 32, 28
 
@@ -65,6 +65,8 @@ class TopBar(Component):
         self.next.draw(surface)
 
 
+SLIDER_W = 240
+
 class StatusBar(Component):
     DOT_R = 5
 
@@ -72,9 +74,15 @@ class StatusBar(Component):
         self.rect = pygame.Rect(rect)
         self.message = ""
         self.level = Level.INFO
+        self.speed = Slider("Step delay", 0.2, 2.0, 0.8, 0.1)   # giây giữa hai bước của Auto Solve
+        self.fit(rect)
 
     def fit(self, rect: pygame.Rect) -> None:
         self.rect = pygame.Rect(rect)
+        self.speed.fit(pygame.Rect(rect.right - Space.lg - SLIDER_W, rect.y, SLIDER_W, rect.h))
+
+    def handle_event(self, e: pygame.event.Event) -> bool:
+        return self.speed.handle_event(e)
 
     def say(self, message: str, level: Level = Level.INFO) -> None:
         self.message, self.level = message, level
@@ -86,9 +94,10 @@ class StatusBar(Component):
         cx, cy = r.x + Space.lg + self.DOT_R, r.centery
         pygame.draw.circle(surface, LEVEL_COLOR[self.level], (cx, cy), self.DOT_R)
         x = cx + self.DOT_R + Space.sm
-        text = ellipsize(self.message, get_font(Size.body), r.right - Space.lg - x)
+        text = ellipsize(self.message, get_font(Size.body), self.speed.rect.x - Space.lg - x)
         s = render_text(text, Size.body, Color.text)
         surface.blit(s, s.get_rect(midleft=(x, cy)))
+        self.speed.draw(surface)
 
 
 class ActionBar(Component):
@@ -104,6 +113,13 @@ class ActionBar(Component):
         self._left = [self.criminal, self.innocent]
         self._right = [Button("Hint", on_hint), Button("Auto Solve", on_auto_solve),
                        Button("Restart", on_restart), Button("Load", on_load)]
+        self.hint = Button("Hint", on_hint)
+        self.auto = Button("Auto Solve", on_auto_solve, width_hint="Auto Solve")
+        self._left = [self.criminal, self.innocent]
+        self._right = [self.hint, self.auto, Button("Restart", on_restart), Button("Load", on_load)]
+
+    def set_auto_running(self, running: bool) -> None:
+        self.auto.label = "Stop" if running else "Auto Solve"
 
     def set_verdict_enabled(self, enabled: bool) -> None:
         self.criminal.enabled = self.innocent.enabled = enabled

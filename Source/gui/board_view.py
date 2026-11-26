@@ -27,6 +27,7 @@ class BoardView(Component):
         self.hovered: Cell | None = None
         self._on_select = on_select or (lambda cell: None)
         self._compute_layout(self.area)
+        self.hint: Cell | None = None
         self.cards = {cell: CharacterCard(self.slot_rect(cell),
                             self._model_for(state, cell)) for cell in state.board.cells()}
 
@@ -88,6 +89,12 @@ class BoardView(Component):
     def shake(self, cell: Cell) -> None:
         """Rung thẻ khi verdict bị từ chối"""
         self.cards[cell].shake()
+
+    def set_hint(self, cell: Cell | None) -> None:
+        """Đặt (hoặc bỏ, nếu None) thẻ mục tiêu của Hint"""
+        self.hint = cell
+        for c, card in self.cards.items():
+            card.hint = c == cell
 
     def handle_event(self, e: pygame.event.Event) -> bool:
         if e.type == pygame.MOUSEMOTION:

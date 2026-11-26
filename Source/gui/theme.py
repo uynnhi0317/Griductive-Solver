@@ -47,6 +47,7 @@ class Color:
 
     # tương tác (cố ý trung tính để không đụng với 3 màu role và 2 màu trạng thái)
     focus = _hex("F4F1FF")
+    hint = _hex("FF9F43")
     hover_overlay = (255, 255, 255, 22)
 
     # vai trò khi highlight clue
