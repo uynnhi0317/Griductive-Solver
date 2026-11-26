@@ -9,6 +9,7 @@ from solver.dpll import SolverTimeout
 from .board_view import BoardView
 from .chrome import ActionBar, StatusBar, TopBar
 from .dialogs import DialogUnavailable, ask_puzzle_path
+from .overlays import GuideOverlay, Overlay
 from .highlight import highlight_roles
 from .layout import MIN_WINDOW, compute_layout
 from .sidebar import Sidebar
@@ -60,6 +61,8 @@ class App:
             on_restart=self._restart,
             on_load=self._load,
         )
+        self.overlay: Overlay | None = None
+        self.guide = GuideOverlay(self._close_overlay)
 
         self.stages = discover_puzzles(self.puzzle_root)
         if not self.stages:
@@ -69,6 +72,8 @@ class App:
         self.selected: Cell | None = None   # ô đang chọn; nếu thẻ đã lật thì clue của nó là clue đang chọn
         if not any(self._load_stage(i) for i in range(len(self.stages))):
             raise SystemExit("Không tìm được puzzle tải thành công")
+
+        self._show_guide(first_run=True)
 
     # ____________________________________________________________components
     @property
@@ -84,6 +89,8 @@ class App:
         self.toasts.fit(lay.board)
         self.board.fit(lay.board)
         self.panel.fit(lay.sidebar)
+        screen = self.screen.get_rect()
+        self.guide.fit(screen)
 
     def _event_order(self):
         return (self.topbar, self.actionbar, self.statusbar, self.panel, self.board)
@@ -240,6 +247,16 @@ class App:
         self.panel.refresh(self.state, self.engine.history)   # verdict bị từ chối cũng nằm trong history
         self._refresh_chrome()          # số SAT calls tăng kể cả khi bị từ chối
 
+    # ______________________________________________________________overlays
+    def _show_guide(self, first_run: bool = False) -> None:
+        if self.auto_running:
+            self._toggle_auto()
+        self.guide.footer = "Click anywhere to start" if first_run else "Click anywhere to continue"
+        self.overlay = self.guide
+
+    def _close_overlay(self) -> None:
+        self.overlay = None
+
     # ______________________________________________________________hint
     def _hint(self) -> None:
         if self.auto_running:
@@ -390,6 +407,8 @@ class App:
             self._nav(-1)
         elif e.key == pygame.K_PAGEDOWN:
             self._nav(1)
+        elif e.key == pygame.K_F1:
+            self._show_guide()
         else:
             return False
         return True
@@ -403,6 +422,8 @@ class App:
                 self.screen = pygame.display.set_mode((w, h), pygame.RESIZABLE)
             self.layout = compute_layout((w, h))
             self._fit_all()
+        elif self.overlay is not None:
+            self.overlay.handle_event(e)
         elif e.type == pygame.KEYDOWN and self._on_key(e):
             return
         else:
@@ -418,11 +439,15 @@ class App:
             self._auto_wait -= dt
             if self._auto_wait <= 0:
                 self._auto_step()
+        if self.overlay is not None:
+            self.overlay.update(dt)
 
     def draw(self) -> None:
         self.screen.fill(Color.bg)
         for component in self._draw_order():
             component.draw(self.screen)
+        if self.overlay is not None:
+            self.overlay.draw(self.screen)
 
     def run(self) -> None:
         while self.running:

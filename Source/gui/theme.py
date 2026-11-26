@@ -49,6 +49,7 @@ class Color:
     focus = _hex("F4F1FF")
     hint = _hex("FF9F43")
     hover_overlay = (255, 255, 255, 22)
+    scrim = _hex("0B0912", 215)
 
     # vai trò khi highlight clue
     role_subject = _hex("FFD84D")
