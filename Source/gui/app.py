@@ -8,10 +8,10 @@ from game.public_state import PublicState
 from solver.dpll import SolverTimeout
 from .board_view import BoardView
 from .chrome import ActionBar, StatusBar, TopBar
-from .clue_panel import CluePanel
 from .dialogs import DialogUnavailable, ask_puzzle_path
 from .highlight import highlight_roles
 from .layout import MIN_WINDOW, compute_layout
+from .sidebar import Sidebar
 from .theme import Color, Level, clear_caches
 from .widgets import ToastManager
 
@@ -105,8 +105,8 @@ class App:
         self.selected = None
         self.board = BoardView(engine.state, self.layout.board,
                                on_select=lambda cell: self._select(cell, toggle=True))
-        self.panel = CluePanel(engine.state, self.layout.sidebar,
-                               on_select=lambda cell: self._select(cell, toggle=True))
+        self.panel = Sidebar(engine.state, engine.history, self.layout.sidebar,
+                             on_select=lambda cell: self._select(cell, toggle=True))
         self._apply_selection()
         self._refresh_chrome()
         self._say(DEFAULT_STATUS)
@@ -117,7 +117,7 @@ class App:
     def _sync_views(self) -> None:
         """Đẩy PublicState mới của engine xuống các view"""
         self.board.refresh(self.state)
-        self.panel.refresh(self.state)
+        self.panel.refresh(self.state, self.engine.history)
         self._apply_selection()
         self._refresh_chrome()
 

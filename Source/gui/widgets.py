@@ -13,6 +13,9 @@ from .theme import (
 BUTTON_H = 36
 ICON_R = 9
 
+BUTTON_H = 36
+ICON_R = 9
+
 
 class Button(Component):
     """
@@ -172,3 +175,104 @@ class ToastManager(Component):
             box.set_alpha(int(ALPHA_OPAQUE * min(1.0, t.ttl / TOAST_FADE)))
             surface.blit(box, box.get_rect(midtop=(self.rect.centerx, y)))
             y += h + Space.sm
+
+
+# ------------------------------------------------------------------ tab bar
+TAB_H = 36
+TAB_PAD_X = Space.md
+TAB_MIN_W = 60
+
+
+class TabBar(Component):
+    """
+    Horizontal tab bar: a row of labelled tabs; clicking activates one.
+    Call active_index to read the current selection.
+    on_change(index) is called whenever the active tab changes.
+    """
+
+    def __init__(self, labels: Sequence[str],
+                 on_change: Callable[[int], None] | None = None,
+                 initial: int = 0) -> None:
+        self._labels = list(labels)
+        self._on_change = on_change or (lambda i: None)
+        self._active = initial
+        self.rect = pygame.Rect(0, 0, 0, 0)
+        self._tab_rects: list[pygame.Rect] = []
+        self._hovered: int | None = None
+
+    # ---------------------------------------------------------------- state
+    @property
+    def active_index(self) -> int:
+        return self._active
+
+    def set_active(self, index: int) -> None:
+        if 0 <= index < len(self._labels) and index != self._active:
+            self._active = index
+            self._on_change(index)
+
+    # --------------------------------------------------------------- layout
+    def fit(self, rect: pygame.Rect) -> None:
+        self.rect = pygame.Rect(rect)
+        self._layout()
+
+    def _layout(self) -> None:
+        """Distribute tabs evenly across the bar width."""
+        n = len(self._labels)
+        if n == 0:
+            self._tab_rects = []
+            return
+        tab_w = self.rect.w // n
+        self._tab_rects = [
+            pygame.Rect(self.rect.x + i * tab_w, self.rect.y, tab_w, TAB_H)
+            for i in range(n)
+        ]
+        # stretch last tab to cover rounding remainder
+        if self._tab_rects:
+            last = self._tab_rects[-1]
+            self._tab_rects[-1] = pygame.Rect(last.x, last.y,
+                                               self.rect.right - last.x, last.h)
+
+    # --------------------------------------------------------------- events
+    def handle_event(self, e: pygame.event.Event) -> bool:
+        if e.type == pygame.MOUSEMOTION:
+            self._hovered = self._tab_at(e.pos)
+            return False   # don't consume: others need hover too
+        if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+            idx = self._tab_at(e.pos)
+            if idx is not None:
+                self.set_active(idx)
+                return True
+        return False
+
+    def _tab_at(self, pos) -> int | None:
+        for i, r in enumerate(self._tab_rects):
+            if r.collidepoint(pos):
+                return i
+        return None
+
+    # ----------------------------------------------------------------- draw
+    def draw(self, surface: pygame.Surface) -> None:
+        font = get_font(Size.body, True)
+        for i, (label, r) in enumerate(zip(self._labels, self._tab_rects)):
+            active = i == self._active
+            hovered = i == self._hovered and not active
+            # background
+            if active:
+                bg = Color.surface_3
+            elif hovered:
+                bg = Color.surface_2
+            else:
+                bg = Color.surface_1
+            pygame.draw.rect(surface, bg, r)
+            # active indicator underline
+            if active:
+                pygame.draw.line(surface, Color.focus,
+                                 (r.x, r.bottom - 2), (r.right, r.bottom - 2), 2)
+            # label
+            color = Color.text if active else Color.text_dim
+            txt = render_text(label, Size.body, color, True)
+            surface.blit(txt, txt.get_rect(center=r.center))
+        # bottom border
+        pygame.draw.line(surface, Color.border,
+                         (self.rect.x, self.rect.bottom - 1),
+                         (self.rect.right, self.rect.bottom - 1))
