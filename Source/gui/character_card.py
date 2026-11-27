@@ -208,12 +208,12 @@ class CharacterCard:
         if m.clue_text is None:
             self._blit_centered_name_job(face, w, h, bottom=1.0 if compact else STAMP_TOP)
         else:
-            self._blit_header(face, w, h, badge_r, inset)
+            header_bottom = self._blit_header(face, w, h, badge_r, inset)
+            top = header_bottom + Space.xs
             if compact:                               # không có con dấu: clue dùng hết phần dưới header
-                top = inset + 2 * badge_r
                 area = pygame.Rect(Space.xs, top, w - 2 * Space.xs, h - top - Space.xs)
-            else:
-                area = pygame.Rect(Space.sm, h * 22 // 100, w - 2 * Space.sm, h * 54 // 100)
+            else:                                     # chừa phần dưới cho con dấu
+                area = pygame.Rect(Space.sm, top, w - 2 * Space.sm, h * 76 // 100 - top)
             font, lines = fit_wrapped(m.clue_text, area.w, area.h, max(10, h // 10))
             y = area.y + (area.h - len(lines) * font.get_linesize()) // 2
             face.set_clip(area)
@@ -229,45 +229,54 @@ class CharacterCard:
         return face
 
     def _blit_header(self, face: pygame.Surface, w: int, h: int, badge_r: int,
-                     inset: int = Space.md) -> None:
+                     inset: int = Space.md) -> int:
         """
-        Avatar nhỏ ở góc trái (đối xứng với huy hiệu góc phải), tên (đậm) và nghề trên MỘT dòng ở giữa.
-        Không vừa ở cỡ caption thì không in nghề, tên tự to lại (cắt '...' nếu vẫn dài).
+        Header giống bản gốc: [avatar | tên đậm / nghề bên dưới] gộp thành MỘT nhóm canh giữa thẻ;
+        nhóm chỉ lùi sang trái khi sắp đè huy hiệu góc phải. Thẻ nhỏ chỉ có [avatar | tên] một dòng.
+        Không vừa thì lần lượt: thu nhỏ chữ (tới cỡ caption) -> bỏ nghề -> bỏ avatar, cắt '...'.
+        Trả về y của đáy header để clue bắt đầu ngay bên dưới.
         """
         ch = self.model.character
-        cy = inset + badge_r                          # cùng hàng với huy hiệu
-        avatar = self._avatar(2 * badge_r + Space.xs)
-        if avatar is not None:
-            face.blit(avatar, avatar.get_rect(center=(inset + badge_r, cy)))
-        text_gap = Space.sm if inset >= Space.md else Space.xs   # thẻ nhỏ: sát hơn để tên còn đủ chỗ
-        margin = 2 * badge_r + inset + text_gap
-        max_w = w - 2 * margin
-        gap = Space.sm
-        start = max(Size.caption, h // 11)
-        size = start
-        can_show_job = True
-        while True:
-            name_font, job_font = get_font(size, True, Face.DISPLAY), get_font(size)
-            total = name_font.size(ch.name)[0] + gap + job_font.size(ch.profession)[0]
-            if total <= max_w:
-                break
-            if size > Size.caption:
-                size -= 1
-            else:
-                can_show_job = False
-                break
+        compact = inset < Space.md
+        right = w - inset - 2 * badge_r - (Space.xs if compact else Space.sm)   # mép phải trước huy hiệu
+        max_w = right - inset
+        gap = Space.xs if compact else Space.sm       # khoảng cách avatar -> chữ
+        floor = Size.min_text if compact else Size.caption   # thẻ nhỏ cho tên nhỏ hơn để clue còn chỗ
+        start = max(floor, h // 8) if compact else max(Size.caption, h // 11)
 
-        if not can_show_job:                          # bỏ nghề thì tên to lại
-            name_font, text = fit_line(ch.name, start, max_w, bold=True, face=Face.DISPLAY)
-            name = name_font.render(text, True, Color.card_text)
-            face.blit(name, name.get_rect(center=(w // 2, cy)))
-            return
+        for show_job in ((False,) if compact else (True, False)):
+            for size in range(start, floor - 1, -1):
+                name_font = get_font(size, True, Face.DISPLAY)
+                job_font = get_font(max(Size.min_text, size - 3))
+                text_w = name_font.size(ch.name)[0]
+                text_h = name_font.get_ascent()      # bỏ phần đệm dưới của Oswald để 2 dòng sát nhau
+                if show_job:
+                    text_w = max(text_w, job_font.size(ch.profession)[0])
+                    text_h += job_font.get_height()
+                else:
+                    text_h = name_font.get_height()
+                av_size = max(2 * badge_r, text_h)
+                if av_size + gap + text_w > max_w:
+                    continue
+                avatar = self._avatar(av_size)
+                group_w = (av_size + gap if avatar is not None else 0) + text_w
+                x = max(inset, min((w - group_w) // 2, right - group_w))   # giữa thẻ, lùi trái nếu chạm huy hiệu
+                cy = inset + av_size // 2
+                if avatar is not None:
+                    face.blit(avatar, avatar.get_rect(midleft=(x, cy)))
+                    x += av_size + gap
+                y = cy - text_h // 2
+                face.blit(name_font.render(ch.name, True, Color.card_text), (x, y))
+                if show_job:
+                    job = job_font.render(ch.profession, True, Color.card_text_dim)
+                    face.blit(job, (x, y + name_font.get_ascent()))
+                return inset + av_size
 
-        name = name_font.render(ch.name, True, Color.card_text)
-        job = job_font.render(ch.profession, True, Color.card_text_dim)
-        x = (w - (name.get_width() + gap + job.get_width())) // 2
-        face.blit(name, name.get_rect(midleft=(x, cy)))
-        face.blit(job, job.get_rect(midleft=(x + name.get_width() + gap, cy)))
+        # không nhóm nào vừa: chỉ còn tên canh giữa, cắt '...'
+        name_font, text = fit_line(ch.name, start, max_w, bold=True, face=Face.DISPLAY)
+        name = name_font.render(text, True, Color.card_text)
+        face.blit(name, name.get_rect(center=(w // 2, inset + badge_r)))
+        return inset + 2 * badge_r
 
     # ------------------------------------------------------ drawing
     def _showing_front(self) -> bool:
@@ -319,4 +328,4 @@ class CharacterCard:
             shape = pygame.Surface(ring.size, pygame.SRCALPHA)
             pygame.draw.rect(shape, (*Color.hint[:3], int(110 + 145 * pulse)), shape.get_rect(),
                              width=Stroke.thick, border_radius=self.RADIUS + HINT_OUTSET)
-            surface.blit(shape, ring)
+            surface.blit(shape, ring)
