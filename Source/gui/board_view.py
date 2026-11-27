@@ -78,7 +78,7 @@ class BoardView(Component):
         return Cell(row0 + 1, col0 + 1)
 
     def set_support(self, cells) -> None:
-        """Cards shown with the 'selected' look (Hint stage 1: cards that hold the proving clues)"""
+        """Hiện cards ứng với stage hint hiện tại (VD: Hint stage 1: highlight thẻ clue chứng minh cho verdict)"""
         self.support = frozenset(cells)
     # ______________________________________________________update
     def refresh(self, state: PublicState) -> None:

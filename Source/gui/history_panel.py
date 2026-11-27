@@ -15,7 +15,7 @@ Panel chỉ đọc LogSnapshot, dựng lại mỗi lần refresh().
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pygame
 
@@ -51,11 +51,12 @@ _OUTCOME_NOTE = {
 
 @dataclass
 class _Item:
-    label: str
+    parts: list[str]         # các đoạn của dòng; nếu không vừa một dòng thì xuống dòng ngay giữa hai đoạn
     color: tuple
     details: list[str]       # details[0] là tiêu đề (in đậm), phần còn lại là các dòng nội dung
     top: int = 0
     height: int = 0
+    lines: list[str] = field(default_factory=list)   # sau khi layout
 
 
 def _who(board: Board, cell: Cell) -> str:
@@ -101,11 +102,19 @@ class HistoryPanel(Component):
         self._wrapped = None
 
     def _layout(self) -> None:
-        line_h = get_font(Size.body).get_linesize() + 2 * ROW_PAD
+        font = get_font(Size.body)
+        text_w = max(10, self._list.w - 2 * PAD - SCROLLBAR_W - STRIPE - Space.sm - Space.xs)
         y = 0
         for item in self._items:
-            item.top, item.height = y, line_h
-            y += line_h + ROW_GAP
+            joined = "  ".join(item.parts)
+            if font.size(joined)[0] <= text_w:
+                item.lines = [joined]
+            else:
+                # cắt ngay trước mũi tên (ranh giới giữa các đoạn); đoạn nào vẫn dài thì ngắt theo từ
+                item.lines = [ln for part in item.parts for ln in wrap_text(part, font, text_w)]
+            item.top = y
+            item.height = 2 * ROW_PAD + len(item.lines) * font.get_linesize()
+            y += item.height + ROW_GAP
         self._content_h = max(0, y - ROW_GAP) if self._items else 0
         self.scroll = max(0, min(self.scroll, self._max_scroll))
 
@@ -148,19 +157,20 @@ class HistoryPanel(Component):
         name = board.character_at(r.cell).name
         tag = e.actor.value
         q = f"{e.sat_queries} SAT"
+        v = r.submitted.value
         if r.outcome is VerdictOutcome.ACCEPTED:
-            label = f"{tag}  Step {step}  {name}  →  {r.submitted.value}  ({q})"
+            parts = [f"{tag}  Step {step}  {name}", f"→  {v}  ({q})"]
             color = STATUS_COLOR[r.submitted]
         elif r.outcome is VerdictOutcome.NOT_PROVABLE:
-            label = f"{tag}  ✗ Not provable: {name} as {r.submitted.value}  ({q})"
+            parts = [f"{tag}  ✗ Not provable: {name}", f"as {v}  ({q})"]
             color = Color.fb_warn
         elif r.outcome is VerdictOutcome.CONTRADICTED:
-            label = f"{tag}  ✗ Contradicted: {name} not {r.submitted.value}  ({q})"
+            parts = [f"{tag}  ✗ Contradicted: {name}", f"not {v}  ({q})"]
             color = Color.fb_error
         else:
-            label = f"{tag}  ✗ Inconsistent KB  ({q})"
+            parts = [f"{tag}  ✗ Inconsistent KB", f"({q})"]
             color = Color.fb_error
-        return _Item(label, color, self._entry_details(e))
+        return _Item(parts, color, self._entry_details(e))
 
     def _entry_details(self, e: HistoryEntry) -> list[str]:
         board, r, s = self._board, e.result, e.step
@@ -207,7 +217,7 @@ class HistoryPanel(Component):
             lines.append("A SAT query exceeded the time limit.")
         if end.queries:
             lines.append(f"Final classification: {end.queries} SAT queries; {end.stats}")
-        return _Item(f"Agent finished: {st.value}", color, lines)
+        return _Item([f"Agent finished: {st.value}"], color, lines)
 
     # --------------------------------------------------------------- events
     def _row_rect(self, item: _Item) -> pygame.Rect:
@@ -273,7 +283,7 @@ class HistoryPanel(Component):
                 if self.selected is None
                 else "Click the row again to return to the latest")
         font = get_font(Size.caption)
-        txt = render_text(ellipsize(text, font, self._hint.w), Size.caption, Color.text)
+        txt = render_text(ellipsize(text, font, self._hint.w), Size.caption, Color.text_dim)
         surface.blit(txt, txt.get_rect(midleft=self._hint.midleft))
 
     def _draw_list(self, surface: pygame.Surface) -> None:
@@ -298,9 +308,11 @@ class HistoryPanel(Component):
                 pygame.draw.rect(surface, item.color, pygame.Rect(rect.x, rect.y, STRIPE, rect.h),
                                  border_top_left_radius=Radius.control,
                                  border_bottom_left_radius=Radius.control)
-                max_w = rect.w - STRIPE - Space.sm - Space.xs
-                txt = render_text(ellipsize(item.label, font, max_w), Size.body, Color.text)
-                surface.blit(txt, txt.get_rect(midleft=(rect.x + STRIPE + Space.sm, rect.centery)))
+                ty = rect.y + ROW_PAD
+                for ln in item.lines:
+                    surface.blit(render_text(ln, Size.body, Color.text),
+                                 (rect.x + STRIPE + Space.sm, ty))
+                    ty += font.get_linesize()
         surface.set_clip(old_clip)
         draw_scrollbar(surface, vp, self._content_h, self.scroll, self._max_scroll)
 
