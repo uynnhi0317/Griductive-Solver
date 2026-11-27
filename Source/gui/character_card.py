@@ -21,6 +21,7 @@ SELECT_SCALE = 1.03     # thẻ được chọn phóng to nhẹ
 SELECT_ANIM = 0.12      # giây để phóng to / thu lại
 ROLE_OUTSET = Space.xs
 HINT_HZ = 1.2           # nhịp đập của vòng gợi ý
+HINT_W = 6              # viền cam của Hint / Reveal: khít mép thẻ, dày hơn viền vai trò để nổi hẳn lên
 HINT_OUTSET = ROLE_OUTSET + Stroke.thick   # nằm ngoài vòng role, vẫn < Space.sm nên không đè thẻ kề
 STAMP_ANGLE = 6         # độ, nghiêng ngược chiều kim đồng hồ
 STAMP_ALPHA = 220
@@ -65,7 +66,8 @@ class CharacterCard:
         self._shake_left = 0.0
         self._sel_target = False
         self.role: Role | None = None                        # vai trò highlight của clue đang chọn
-        self.hint = False                                    # đang là mục tiêu của Hint
+        self.hint = False                                    # đang là mục tiêu của Hint (bước Reveal)
+        self.support = False                                 # đang giữ clue cần dùng (bước Hint 1/2)
         self.dimmed = False                                  # không liên quan tới clue đang chọn
         self._hint_time = 0.0
         self._set_model(model)
@@ -310,7 +312,7 @@ class CharacterCard:
         if hovered and front:
             draw_rect_alpha(surface, Color.hover_overlay, r, self.RADIUS)
 
-        if selected and self.role is None:
+        if selected and self.role is None and not self.support:
             ring_w = min(Stroke.thick, max(1, w // 2))
             pygame.draw.rect(surface, Color.focus_edge, r, width=ring_w, border_radius=self.RADIUS)
             inner = r.inflate(-2 * ring_w, -2 * ring_w)
@@ -324,11 +326,16 @@ class CharacterCard:
                 draw_rect_alpha(surface, (*color[:3], Color.role_tint), r, self.RADIUS)
             pygame.draw.rect(surface, color, r, width=min(ROLE_W, max(1, w // 2)), border_radius=self.RADIUS)
 
-        if self.hint:
+        border_w = min(HINT_W, max(1, w // 2))
+        if self.support:      # Hint 1/2: thẻ giữ clue cần dùng -> viền cam đặc
+            pygame.draw.rect(surface, Color.hint, r, width=border_w, border_radius=self.RADIUS)
+
+        if self.hint:         # Reveal 2/2: viền cam đặc + nền cam nhấp nháy + quầng sáng bên ngoài
             pulse = 0.5 - 0.5 * math.cos(2 * math.pi * HINT_HZ * self._hint_time)
-            draw_rect_alpha(surface, (*Color.hint[:3], int(25 + 60 * pulse)), r, self.RADIUS)
+            draw_rect_alpha(surface, (*Color.hint[:3], int(45 + 75 * pulse)), r, self.RADIUS)
+            pygame.draw.rect(surface, Color.hint, r, width=border_w, border_radius=self.RADIUS)
             ring = r.inflate(2 * HINT_OUTSET, 2 * HINT_OUTSET)
             shape = pygame.Surface(ring.size, pygame.SRCALPHA)
-            pygame.draw.rect(shape, (*Color.hint[:3], int(110 + 145 * pulse)), shape.get_rect(),
+            pygame.draw.rect(shape, (*Color.hint[:3], int(90 + 165 * pulse)), shape.get_rect(),
                              width=Stroke.thick, border_radius=self.RADIUS + HINT_OUTSET)
             surface.blit(shape, ring)

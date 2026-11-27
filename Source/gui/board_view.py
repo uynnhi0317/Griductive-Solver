@@ -29,6 +29,7 @@ class BoardView(Component):
         self._compute_layout(self.area)
         self.hint: Cell | None = None
         self.support: frozenset[Cell] = frozenset()
+        self._roles: dict[Cell, Role] = {}
         self.cards = {cell: CharacterCard(self.slot_rect(cell),
                             self._model_for(state, cell)) for cell in state.board.cells()}
 
@@ -80,17 +81,36 @@ class BoardView(Component):
     def set_support(self, cells) -> None:
         """Hiện cards ứng với stage hint hiện tại (VD: Hint stage 1: highlight thẻ clue chứng minh cho verdict)"""
         self.support = frozenset(cells)
+        for c, card in self.cards.items():
+            card.support = c in self.support
+        self._update_dim()
     # ______________________________________________________update
     def refresh(self, state: PublicState) -> None:
         for cell, card in self.cards.items():
             card.sync(self._model_for(state, cell))
 
     def set_highlights(self, roles: Mapping[Cell, Role]) -> None:
-        """Tô các ô theo vai trò; đang có clue được chọn thì thẻ không liên quan (trừ thẻ đang chọn) bị làm mờ"""
-        active = bool(roles)
+        """Tô các ô theo vai trò của clue đang chọn"""
+        self._roles = dict(roles)
         for cell, card in self.cards.items():
             card.role = roles.get(cell)
-            card.dimmed = active and card.role is None and cell != self.selected
+        self._update_dim()
+
+    def _update_dim(self) -> None:
+        """
+        Làm mờ mọi thẻ nằm ngoài tâm điểm hiện tại, ưu tiên theo thứ tự:
+        Hint 1/2 (thẻ giữ clue cần dùng) -> Reveal 2/2 (thẻ mục tiêu) -> clue đang chọn (thẻ có vai trò + thẻ đang chọn)
+        """
+        if self.support:
+            keep = set(self.support)
+        elif self.hint is not None:
+            keep = {self.hint}
+        elif self._roles:
+            keep = set(self._roles) | ({self.selected} if self.selected is not None else set())
+        else:
+            keep = None
+        for cell, card in self.cards.items():
+            card.dimmed = keep is not None and cell not in keep
 
     def shake(self, cell: Cell) -> None:
         """Rung thẻ khi verdict bị từ chối"""
@@ -101,6 +121,7 @@ class BoardView(Component):
         self.hint = cell
         for c, card in self.cards.items():
             card.hint = c == cell
+        self._update_dim()
 
     def handle_event(self, e: pygame.event.Event) -> bool:
         if e.type == pygame.MOUSEMOTION:
