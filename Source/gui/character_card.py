@@ -11,7 +11,7 @@ from .theme import (
     draw_rect_alpha, draw_status_icon, fit_line, fit_wrapped, get_font,
 )
 
-COMPACT_PX = 160        # thẻ nhỏ hơn ngưỡng này chỉ hiện huy hiệu + tên
+COMPACT_PX = 110        # thẻ nhỏ hơn ngưỡng này chỉ hiện huy hiệu + tên
 SHAKE_DUR = 0.35
 SHAKE_WAVES = 3
 SHAKE_MIN_PX = 3
@@ -19,6 +19,8 @@ SHAKE_AMP_FRAC = 0.04
 SELECT_SCALE = 1.03     # thẻ được chọn phóng to nhẹ
 SELECT_ANIM = 0.12      # giây để phóng to / thu lại
 ROLE_OUTSET = Space.xs
+HINT_HZ = 1.2           # nhịp đập của vòng gợi ý
+HINT_OUTSET = ROLE_OUTSET + Stroke.thick   # nằm ngoài vòng role, vẫn < Space.sm nên không đè thẻ kề
 
 
 @dataclass(frozen=True)
@@ -52,6 +54,8 @@ class CharacterCard:
         self._shake_left = 0.0
         self._sel_target = False
         self.role: Role | None = None                        # vai trò highlight của clue đang chọn
+        self.hint = False                                    # đang là mục tiêu của Hint
+        self._hint_time = 0.0
         self._set_model(model)
 
     # ------------------------------------------------------ setting up
@@ -101,6 +105,8 @@ class CharacterCard:
             self.sel_t = min(1.0, self.sel_t + sel_step)
         else:
             self.sel_t = max(0.0, self.sel_t - sel_step)
+
+        self._hint_time = self._hint_time + dt if self.hint else 0.0
 
     # ------------------------------------------------------ rendering
     def _blank(self, fill) -> pygame.Surface:
@@ -237,3 +243,12 @@ class CharacterCard:
             outer = r.inflate(2 * ROLE_OUTSET, 2 * ROLE_OUTSET)
             pygame.draw.rect(surface, color, outer, width=Stroke.thick,
                              border_radius=self.RADIUS + ROLE_OUTSET)
+
+        if self.hint:
+            pulse = 0.5 - 0.5 * math.cos(2 * math.pi * HINT_HZ * self._hint_time)
+            draw_rect_alpha(surface, (*Color.hint[:3], int(25 + 60 * pulse)), r, self.RADIUS)
+            ring = r.inflate(2 * HINT_OUTSET, 2 * HINT_OUTSET)
+            shape = pygame.Surface(ring.size, pygame.SRCALPHA)
+            pygame.draw.rect(shape, (*Color.hint[:3], int(110 + 145 * pulse)), shape.get_rect(),
+                             width=Stroke.thick, border_radius=self.RADIUS + HINT_OUTSET)
+            surface.blit(shape, ring)
