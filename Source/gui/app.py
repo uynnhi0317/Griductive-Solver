@@ -1,3 +1,4 @@
+import os
 import pygame
 from pathlib import Path
 from engine.game_engine import EngineInvariantError, GameEngine, VerdictOutcome, VerdictResult
@@ -37,6 +38,9 @@ class App:
 
     def __init__(self, puzzle_root: Path = PUZZLE_ROOT) -> None:
         self.puzzle_root = Path(puzzle_root)
+        # Windows đang scale 125%/150%: không khai báo thì Windows vẽ ở độ phân giải thấp rồi kéo giãn -> mờ.
+        # Báo SDL tự vẽ theo pixel thật (SDL >= 2.24; macOS / Linux bỏ qua biến này)
+        os.environ.setdefault("SDL_WINDOWS_DPI_AWARENESS", "permonitorv2")
         pygame.init()
         pygame.display.set_caption("Griductive Solver")
         info = pygame.display.Info()
