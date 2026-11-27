@@ -60,6 +60,7 @@ class App:
         self.auto_running = False
         self._auto_wait = 0.0
         self.actionbar = ActionBar(
+            on_help=self._show_guide,
             on_hint=self._hint_action,
             on_auto_solve=self._toggle_auto,
             on_restart=self._restart,

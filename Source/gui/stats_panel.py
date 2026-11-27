@@ -29,11 +29,12 @@ WHEEL_STEP = 48
 SECTION_GAP = Space.lg
 STRIPE_W = 3
 
-_COL_STEP = 44
-_COL_VERDICT = 88
-_COL_SAT = 48
-_COL_DEC = 56
-_COL_PROP = 56
+CELL_PAD = Space.xs       # lề trong mỗi ô (hẹp để sidebar 300px vẫn đủ 6 cột)
+COL_GAP = Space.xs        # khoảng trống giữa hai cột
+WHO_MIN_W = 48            # khung hẹp: cột Character co tới mức này (tên dài thì cắt '...')
+_HEADERS = ("#", "Character", "Verdict", "SAT", "Dec", "Prop")
+_ALIGN = ("r", "l", "l", "r", "r", "r")
+_ROW_SIZES = (Size.body, Size.caption)   # cỡ chữ của dòng: thử cỡ thường trước, không vừa khung thì dùng cỡ nhỏ
 
 
 class StatsPanel(Component):
@@ -45,6 +46,7 @@ class StatsPanel(Component):
         self._rows: list[dict] = []
         self._totals_row: dict = {}
         self._summary: list[tuple[str, str]] = []
+        self._widths: dict[int, list[int]] = {}         # cỡ chữ -> bề rộng tự nhiên của từng cột
         self.refresh(snap)
 
     # --------------------------------------------------------------- layout
@@ -109,7 +111,23 @@ class StatsPanel(Component):
             ("Backtracks", str(t.backtracks)),
             ("Runtime", f"{t.runtime * 1000:.3f} ms"),
         ]
+        self._measure_columns()
         self._recalc_content_h()
+
+    def _measure_columns(self) -> None:
+        """Với mỗi cỡ chữ: mỗi cột rộng vừa đủ cho chữ dài nhất của nó (tiêu đề, các dòng, dòng tổng)"""
+        head = get_font(Size.caption, True)
+        keys = ("step", "who", "verdict", "sat", "dec", "prop")
+        totals = ("Σ", "", "", str(self._totals_row.get("sat", "")),
+                  str(self._totals_row.get("dec", "")), str(self._totals_row.get("prop", "")))
+        for size in _ROW_SIZES:
+            body, bold = get_font(size), get_font(size, True)
+            widths = []
+            for i, key in enumerate(keys):
+                texts = [str(r[key]) for r in self._rows]
+                w = max([head.size(_HEADERS[i])[0], bold.size(totals[i])[0]] + [body.size(t)[0] for t in texts])
+                widths.append(w + 2 * CELL_PAD)
+            self._widths[size] = widths
 
     # --------------------------------------------------------------- events
     def handle_event(self, e: pygame.event.Event) -> bool:
@@ -134,14 +152,15 @@ class StatsPanel(Component):
         x0 = vp.x + PAD
         content_w = vp.w - 2 * PAD - SCROLLBAR_W
 
-        y = self._draw_header(surface, x0, content_w, y)
+        size, cols = self._layout(x0, content_w)
+        y = self._draw_header(surface, cols, x0, content_w, y)
         for row in self._rows:
             if vp.y <= y + ROW_H and y < vp.bottom:
-                y = self._draw_row(surface, row, x0, content_w, y)
+                y = self._draw_row(surface, row, cols, size, x0, content_w, y)
             else:
                 y += ROW_H + ROW_GAP
 
-        y = self._draw_totals(surface, x0, content_w, y)
+        y = self._draw_totals(surface, cols, size, x0, content_w, y)
         y += SECTION_GAP
         self._draw_summary(surface, x0, content_w, y, vp)
 
@@ -149,40 +168,43 @@ class StatsPanel(Component):
         draw_scrollbar(surface, vp, self._content_h, self.scroll, self._max_scroll)
 
     # ---------------------------------------------------------------- helpers
-    def _cols(self, x0: int, w: int) -> list[tuple[str, int, str, int]]:
-        """(nhãn, x, căn lề, bề rộng tối đa của chữ) cho từng cột"""
-        fixed = _COL_STEP + _COL_VERDICT + _COL_SAT + _COL_DEC + _COL_PROP
-        who_w = max(60, w - fixed)
-        xs = [x0,
-              x0 + _COL_STEP,
-              x0 + _COL_STEP + who_w,
-              x0 + _COL_STEP + who_w + _COL_VERDICT,
-              x0 + _COL_STEP + who_w + _COL_VERDICT + _COL_SAT,
-              x0 + _COL_STEP + who_w + _COL_VERDICT + _COL_SAT + _COL_DEC]
-        return [
-            ("#", xs[0], "r", _COL_STEP),
-            ("Character", xs[1], "l", who_w - Space.sm),
-            ("Verdict", xs[2], "l", _COL_VERDICT - Space.sm),
-            ("SAT", xs[3], "r", _COL_SAT),
-            ("Dec", xs[4], "r", _COL_DEC),
-            ("Prop", xs[5], "r", _COL_PROP),
-        ]
-
-    def _blit_cell(self, surface, font, text, color, cx, align, max_w, y) -> None:
-        txt = font.render(ellipsize(text, font, max_w), True, color)
-        if align == "r":
-            surface.blit(txt, txt.get_rect(midright=(cx + _COL_STEP - Space.sm, y + ROW_H // 2)))
+    def _layout(self, x0: int, w: int) -> tuple[int, list[tuple[str, int, str, int]]]:
+        """
+        (cỡ chữ của dòng, các cột (nhãn, x, căn lề, bề rộng)).
+        Dùng cỡ chữ thường nếu đủ chỗ, không thì cỡ nhỏ. Còn dư: chia đều cho mọi cột để các cột giãn đều,
+        không dồn khoảng trống sau tên. Vẫn thiếu: chỉ cột Character co lại (tên dài thì cắt '...').
+        """
+        gaps = COL_GAP * (len(_HEADERS) - 1)
+        size = next((sz for sz in _ROW_SIZES if sum(self._widths[sz]) + gaps <= w), _ROW_SIZES[-1])
+        widths = list(self._widths[size])
+        extra = w - sum(widths) - COL_GAP * (len(_HEADERS) - 1)
+        if extra >= 0:
+            share, rest = divmod(extra, len(widths))
+            widths = [cw + share for cw in widths]
+            widths[1] += rest
         else:
-            surface.blit(txt, txt.get_rect(midleft=(cx, y + ROW_H // 2)))
+            widths[1] = max(WHO_MIN_W, widths[1] + extra)
+        cols, x = [], x0
+        for label, align, cw in zip(_HEADERS, _ALIGN, widths):
+            cols.append((label, x, align, cw))
+            x += cw + COL_GAP
+        return size, cols
 
-    def _draw_header(self, surface, x0, w, y) -> int:
+    def _blit_cell(self, surface, font, text, color, cx, align, col_w, y) -> None:
+        txt = font.render(ellipsize(text, font, col_w - 2 * CELL_PAD), True, color)
+        if align == "r":    # canh phải theo đúng mép phải của CỘT NÀY
+            surface.blit(txt, txt.get_rect(midright=(cx + col_w - CELL_PAD, y + ROW_H // 2)))
+        else:
+            surface.blit(txt, txt.get_rect(midleft=(cx + CELL_PAD, y + ROW_H // 2)))
+
+    def _draw_header(self, surface, cols, x0, w, y) -> int:
         font = get_font(Size.caption, True)
-        for label, cx, align, max_w in self._cols(x0, w):
+        for label, cx, align, max_w in cols:
             self._blit_cell(surface, font, label, Color.text_dim, cx, align, max_w, y)
         pygame.draw.line(surface, Color.border, (x0, y + ROW_H - 1), (x0 + w, y + ROW_H - 1))
         return y + ROW_H
 
-    def _draw_row(self, surface, row: dict, x0: int, w: int, y: int) -> int:
+    def _draw_row(self, surface, row: dict, cols, size: int, x0: int, w: int, y: int) -> int:
         rect = pygame.Rect(x0, y, w, ROW_H)
         pygame.draw.rect(surface, Color.surface_2 if row["accepted"] else Color.surface_1,
                          rect, border_radius=Radius.control)
@@ -194,20 +216,20 @@ class StatsPanel(Component):
         values = [str(row["step"]), row["who"], row["verdict"],
                   str(row["sat"]), str(row["dec"]), str(row["prop"])]
         color = Color.text if row["accepted"] else Color.text_dim
-        font = get_font(Size.body)
-        for (_, cx, align, max_w), val in zip(self._cols(x0, w), values):
+        font = get_font(size)
+        for (_, cx, align, max_w), val in zip(cols, values):
             self._blit_cell(surface, font, val, color, cx, align, max_w, y)
         return y + ROW_H + ROW_GAP
 
-    def _draw_totals(self, surface, x0, w, y) -> int:
+    def _draw_totals(self, surface, cols, size: int, x0, w, y) -> int:
         pygame.draw.line(surface, Color.border, (x0, y), (x0 + w, y))
         y += ROW_GAP
         pygame.draw.rect(surface, Color.surface_3, pygame.Rect(x0, y, w, ROW_H),
                          border_radius=Radius.control)
         t = self._totals_row
         values = ["Σ", "", "", str(t["sat"]), str(t["dec"]), str(t["prop"])]
-        font = get_font(Size.body, True)
-        for (_, cx, align, max_w), val in zip(self._cols(x0, w), values):
+        font = get_font(size, True)
+        for (_, cx, align, max_w), val in zip(cols, values):
             if val:
                 self._blit_cell(surface, font, val, Color.text, cx, align, max_w, y)
         return y + ROW_H

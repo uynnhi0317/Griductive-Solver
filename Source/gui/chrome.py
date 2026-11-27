@@ -7,6 +7,7 @@ from .theme import Color, Face, LEVEL_COLOR, Level, Size, Space, ellipsize, get_
 from .widgets import Button, Slider, place_buttons
 
 NAV_W, NAV_H = 32, 28
+HELP_LABEL = "?  How to play"
 
 
 class TopBar(Component):
@@ -100,15 +101,16 @@ _HINT_LABELS = ("Hint", "Reveal", "Clear")
 
 class ActionBar(Component):
     """
-    Hàng nút dưới bàn cờ: Hint / Auto Solve / Restart / Load (phải).
-    Phán quyết Criminal / Innocent nằm trong VerdictPopup hiện cạnh thẻ được chọn.
+    Hàng nút dưới bàn cờ: How to play (trái), Hint / Auto Solve / Restart / Load (phải).
+    Phán quyết Criminal / Innocent nằm trong hộp thoại mở ra khi bấm vào thẻ úp.
     """
 
-    def __init__(self, on_hint, on_auto_solve, on_restart, on_load):
+    def __init__(self, on_help, on_hint, on_auto_solve, on_restart, on_load):
         self.rect = pygame.Rect(0, 0, 0, 0)
+        self.help = Button(HELP_LABEL, on_help)        # góc dưới-trái, mở hướng dẫn chơi (giống phím F1)
         self.hint = Button("Hint", on_hint)
         self.auto = Button("Auto Solve", on_auto_solve, width_hint="Auto Solve")
-        self._left: list[Button] = []
+        self._left = [self.help]
         self._right = [self.hint, self.auto, Button("Restart", on_restart), Button("Load", on_load)]
 
     def set_hint_stage(self, stage: int) -> None:
