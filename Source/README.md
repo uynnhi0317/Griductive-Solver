@@ -74,9 +74,13 @@ python main.py
 python -m pytest tests/ -v
 ```
 **Benchmark - Đo số liệu các thuật giải và vẽ biểu đồ**
-```bash 
-python -m experiments.run_benchmark             # Đo số liệu
-python -m experiments.plot_results              # Vẽ biểu đồ
+```bash
+# Đo số liệu 
+python -m experiments.run_benchmark
+python -m experiments.run_benchmark --sizes 3 4 --model-reuse both --repeat 3 --save-traces
+
+# Vẽ biểu đồ
+python -m experiments.plot_results
 ```
 
 ## 4. Cấu trúc thư mục
