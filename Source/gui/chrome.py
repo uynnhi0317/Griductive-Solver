@@ -99,6 +99,7 @@ class StatusBar(Component):
         surface.blit(s, s.get_rect(midleft=(x, cy)))
         self.speed.draw(surface)
 
+_HINT_LABELS = ("Hint", "Reveal", "Clear") 
 
 class ActionBar(Component):
     """Hàng nút dưới bàn cờ: phán quyết (trái), Hint / Auto Solve / Restart / Load (phải)"""
@@ -114,6 +115,9 @@ class ActionBar(Component):
         self.auto = Button("Auto Solve", on_auto_solve, width_hint="Auto Solve")
         self._left = [self.criminal, self.innocent]
         self._right = [self.hint, self.auto, Button("Restart", on_restart), Button("Load", on_load)]
+
+    def set_hint_stage(self, stage: int) -> None:
+        self.hint.label = _HINT_LABELS[stage]
 
     def set_auto_running(self, running: bool) -> None:
         self.auto.label = "Stop" if running else "Auto Solve"

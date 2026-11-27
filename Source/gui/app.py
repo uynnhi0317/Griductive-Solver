@@ -15,7 +15,7 @@ from .sidebar import Sidebar
 from .theme import Color, Level, clear_caches
 from .widgets import ToastManager
 from .action_log import ActionLog
-from agent.logic_agent import AgentInvariantError, LogicAgent, find_hint
+from agent.logic_agent import AgentInvariantError, Hint, LogicAgent, find_hint
 from agent.trace import AgentStatus
 
 PUZZLE_ROOT = Path(__file__).resolve().parent.parent / "puzzles"
@@ -57,11 +57,13 @@ class App:
         self.actionbar = ActionBar(
             on_verdict=self._verdict,
             on_verdict_blocked=self._warn_select_first,
-            on_hint=self._hint,
+            on_hint=self._hint_action,
             on_auto_solve=self._toggle_auto,
             on_restart=self._restart,
             on_load=self._open_load
         )
+        self._hint: Hint | None = None
+        self._hint_stage = 0
         self.overlay: Overlay | None = None
         self.guide = GuideOverlay(self._close_overlay)
         self.loader = LoadOverlay(self._apply_load, self._close_overlay)
@@ -116,6 +118,9 @@ class App:
             print(f"[App] Không tải được puzzle {path.name}: {exc}")
             return False
         self.engine = engine
+        self._hint = None
+        self._hint_stage = 0
+        self.actionbar.set_hint_stage(0)
         self.agent = None
         self.log.clear()
         self._stop_auto()
@@ -134,7 +139,7 @@ class App:
 
     def _sync_views(self) -> None:
         """Đẩy PublicState mới của engine xuống các view"""
-        self.board.set_hint(None)
+        self._reset_hint()
         self.board.refresh(self.state)
         self.panel.refresh(self.state, self._snapshot())
         self._apply_selection()
@@ -267,15 +272,24 @@ class App:
             self._fail(f"Could not load {self.stages[index].name} (see console).")
 
     # ______________________________________________________________hint
-    def _hint(self) -> None:
+    def _hint_action(self) -> None:
         if self.auto_running:
             self._warn_select_first()
             return
+        if self._hint_stage == 0:
+            self._hint_show_clues()
+        elif self._hint_stage == 1:
+            self._hint_show_target()
+        else:
+            self._reset_hint()
+            self._say(DEFAULT_STATUS)
+
+    def _hint_show_clues(self) -> None:
         if self.engine.is_solved():
             self._say("Nothing to hint: the puzzle is solved.")
             return
         try:
-            hint = find_hint(self.state, SAT_TIME_LIMIT)    # chỉ nhận PublicState, không đọc đáp án ẩn
+            hint = find_hint(self.state, SAT_TIME_LIMIT)    # PublicState only, never the hidden solution
         except SolverTimeout:
             self._fail(f"Solver timed out after {SAT_TIME_LIMIT:g}s; no hint.")
             return
@@ -284,19 +298,38 @@ class App:
             self.toasts.show("No forced verdict available", Level.WARN)
             return
 
-        support = [Cell.parse(label) for label in hint.clue_ids]
-        self.selected = support[0] if support else None     # thẻ mục tiêu còn úp nên không chọn được; chọn clue chứng minh
-        self._apply_selection()
-        self.board.set_hint(hint.cell)
-        self._refresh_chrome()
+        # a selected revealed card would paint its clue regions, which could include the target
+        if self.selected is not None and self.state.is_known(self.selected):
+            self.selected = None
+            self._apply_selection()
+            self._refresh_chrome()
 
-        who = self._who(hint.cell)
+        support = [Cell.parse(label) for label in hint.clue_ids]
+        self._hint, self._hint_stage = hint, 1
+        self.board.set_support(support)
+        self.actionbar.set_hint_stage(1)
         if support:
             owners = ", ".join(self._who(c) for c in support)
-            self._say(f"Hint: {who} can be proved. Relevant clues: {owners}.")
+            self._say(f"Hint 1/2: the highlighted cards hold the clues that prove a verdict ({owners}). Press Reveal for the card.")
         else:
-            self._say(f"Hint: {who} can be proved from the known verdicts alone.")
+            self._say("Hint 1/2: a verdict follows from the known verdicts alone. Press Reveal for the card.")
+        self.toasts.show("Hint: study the highlighted clues", Level.INFO)
+
+    def _hint_show_target(self) -> None:
+        self._hint_stage = 2
+        self.board.set_support(())
+        self.board.set_hint(self._hint.cell)
+        self.actionbar.set_hint_stage(2)
+        who = self._who(self._hint.cell)
+        self._say(f"Hint 2/2: {who} can be proved. Press Clear to dismiss.")
         self.toasts.show(f"Hint: look at {who}", Level.INFO)
+
+    def _reset_hint(self) -> None:
+        self._hint = None
+        self._hint_stage = 0
+        self.board.set_hint(None)
+        self.board.set_support(())
+        self.actionbar.set_hint_stage(0)
 
     # ______________________________________________________________auto solve
     def _toggle_auto(self) -> None:
@@ -363,7 +396,7 @@ class App:
         """Chọn ô; toggle=True (click chuột): bấm lại ô đang chọn thì bỏ chọn"""
         self.selected = None if toggle and cell is not None and cell == self.selected else cell
         if cell is not None and cell == self.board.hint:
-            self.board.set_hint(None)
+            self._reset_hint()
         self._apply_selection()
         self._refresh_chrome()
         self._announce_selection()
@@ -407,12 +440,15 @@ class App:
         elif e.key == pygame.K_i:
             self._verdict(Status.INNOCENT)
         elif e.key == pygame.K_h:
-            self._hint()
+            self._hint_action()
         elif e.key == pygame.K_a:
             self._toggle_auto()
         elif e.key == pygame.K_ESCAPE:
             if self.auto_running:
                 self._toggle_auto()
+            elif self._hint_stage:
+                self._reset_hint()
+                self._say(DEFAULT_STATUS)
             else:
                 self._select(None)
         elif e.key == pygame.K_PAGEUP:

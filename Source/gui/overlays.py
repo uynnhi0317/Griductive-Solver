@@ -73,7 +73,7 @@ _GUIDE_ROWS = (
     ("Click / Arrows", "Select a card"),
     ("Click a clue", "Highlight the cells it refers to"),
     ("C  /  I", "Call the card Criminal / Innocent"),
-    ("H", "Hint: show a provable card and its clues"),
+    ("H", "Hint: clues, then the card, then clear"),
     ("A", "Auto Solve / Stop"),
     ("Esc", "Deselect, or stop Auto Solve"),
     ("PgUp / PgDn", "Previous / next stage"),
