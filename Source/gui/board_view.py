@@ -27,6 +27,8 @@ class BoardView(Component):
         self.hovered: Cell | None = None
         self._on_select = on_select or (lambda cell: None)
         self._compute_layout(self.area)
+        self.hint: Cell | None = None
+        self.support: frozenset[Cell] = frozenset()
         self.cards = {cell: CharacterCard(self.slot_rect(cell),
                             self._model_for(state, cell)) for cell in state.board.cells()}
 
@@ -75,19 +77,30 @@ class BoardView(Component):
 
         return Cell(row0 + 1, col0 + 1)
 
+    def set_support(self, cells) -> None:
+        """Hiện cards ứng với stage hint hiện tại (VD: Hint stage 1: highlight thẻ clue chứng minh cho verdict)"""
+        self.support = frozenset(cells)
     # ______________________________________________________update
     def refresh(self, state: PublicState) -> None:
         for cell, card in self.cards.items():
             card.sync(self._model_for(state, cell))
 
     def set_highlights(self, roles: Mapping[Cell, Role]) -> None:
-        """Tô các ô theo vai trò; ô không có trong roles bị bỏ highlight"""
+        """Tô các ô theo vai trò; đang có clue được chọn thì thẻ không liên quan (trừ thẻ đang chọn) bị làm mờ"""
+        active = bool(roles)
         for cell, card in self.cards.items():
             card.role = roles.get(cell)
+            card.dimmed = active and card.role is None and cell != self.selected
 
     def shake(self, cell: Cell) -> None:
         """Rung thẻ khi verdict bị từ chối"""
         self.cards[cell].shake()
+
+    def set_hint(self, cell: Cell | None) -> None:
+        """Đặt (hoặc bỏ, nếu None) thẻ mục tiêu của Hint"""
+        self.hint = cell
+        for c, card in self.cards.items():
+            card.hint = c == cell
 
     def handle_event(self, e: pygame.event.Event) -> bool:
         if e.type == pygame.MOUSEMOTION:
@@ -118,8 +131,12 @@ class BoardView(Component):
     def draw(self, surface: pygame.Surface) -> None:
         self._draw_labels(surface)
         # thẻ được chọn vẽ sau cùng để phần phóng to / vòng focus không bị thẻ kề đè lên
+        focus = set(self.support)
+        if self.selected is not None:
+            focus.add(self.selected)
         for cell, card in self.cards.items():
-            if cell != self.selected:
+            if cell not in focus:
                 card.draw(surface, False, cell == self.hovered)
-        if self.selected in self.cards:
-            self.cards[self.selected].draw(surface, True, self.selected == self.hovered)
+        for cell, card in self.cards.items():      # focused cards last so the zoom/ring is not overdrawn
+            if cell in focus:
+                card.draw(surface, True, cell == self.hovered)

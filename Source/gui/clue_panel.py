@@ -6,8 +6,8 @@ from game.character import Status
 from game.public_state import PublicState
 from .component import Component
 from .highlight import Role
-from .theme import (Color, ROLE_COLOR, Radius, Size, Space, Stroke,
-                    draw_rect_alpha, draw_status_icon, get_font, render_text, wrap_text)
+from .theme import (Color, Face, ROLE_COLOR, Radius, Size, Space, Stroke, SCROLLBAR_W,
+                    draw_status_icon, get_font, render_text, wrap_text, draw_scrollbar)
 
 PAD = Space.md              # lề của panel
 ROW_PAD = Space.md          # lề trong một dòng clue
@@ -16,7 +16,6 @@ HEADER_H = 44
 FOOTER_H = 34
 ICON_R = 8
 SWATCH = 12
-SCROLLBAR_W = 6
 WHEEL_STEP = 48
 
 _LEGEND = (("Subject", Role.SUBJECT), ("Counted", Role.COUNTED), ("Condition", Role.CONDITION))
@@ -43,6 +42,7 @@ class CluePanel(Component):
         self.selected: Cell | None = None
         self.hover_pos: tuple[int, int] | None = None
         self.scroll = 0
+        self._draw_scrollbar = draw_scrollbar
         self._rows: list[_Row] = []
         self._content_h = 0
         self.refresh(state)
@@ -58,7 +58,7 @@ class CluePanel(Component):
         return max(0, self._content_h - self.viewport.h)
 
     def _layout(self) -> None:
-        body, tag = get_font(Size.body), get_font(Size.caption, True)
+        body, tag = get_font(Size.body), get_font(Size.caption, True, Face.TYPEWRITER)
         text_w = self.area.w - 2 * PAD - 2 * ROW_PAD - SCROLLBAR_W
         y = 0
         for row in self._rows:
@@ -127,7 +127,7 @@ class CluePanel(Component):
         a = self.area
         pygame.draw.rect(surface, Color.surface_1, a, border_radius=Radius.card)
 
-        title = render_text(f"Clues ({len(self._rows)})", Size.title, Color.text, True)
+        title = render_text(f"Clues ({len(self._rows)})", Size.h2, Color.text, True, Face.DISPLAY)
         surface.blit(title, (a.x + PAD, a.y + (HEADER_H - title.get_height()) // 2 + 2))
 
         vp = self.viewport
@@ -143,7 +143,7 @@ class CluePanel(Component):
                 self._draw_row(surface, row, rect, row.cell == self.selected, row.cell == hovered)
         surface.set_clip(old_clip)
 
-        self._draw_scrollbar(surface, vp)
+        draw_scrollbar(surface, vp, self._content_h, self.scroll, self.max_scroll)
         self._draw_legend(surface)
 
     def _draw_row(self, surface, row: _Row, rect: pygame.Rect, selected: bool, hovered: bool) -> None:
@@ -155,22 +155,13 @@ class CluePanel(Component):
         body_font = get_font(Size.body)
         x, y = rect.x + ROW_PAD, rect.y + ROW_PAD
         draw_status_icon(surface, row.status, x + ICON_R, y + ICON_R, ICON_R)
-        tag = render_text(f"{row.cell.label}  {row.name}", Size.caption, Color.text_dim, True)
+        tag = render_text(f"{row.cell.label}  {row.name}", Size.caption, Color.text_dim, True, Face.TYPEWRITER)
         surface.blit(tag, tag.get_rect(midleft=(x + 2 * ICON_R + Space.sm, y + ICON_R)))
 
         y += 2 * ICON_R + Space.xs
         for line in row.lines:
             surface.blit(render_text(line, Size.body, Color.text), (x, y))
             y += body_font.get_linesize()
-
-    def _draw_scrollbar(self, surface, vp: pygame.Rect) -> None:
-        if self.max_scroll <= 0:
-            return
-        track_h = vp.h
-        thumb_h = max(24, track_h * vp.h // self._content_h)
-        thumb_y = vp.y + (track_h - thumb_h) * self.scroll // self.max_scroll
-        thumb = pygame.Rect(vp.right - SCROLLBAR_W - Space.xs, thumb_y, SCROLLBAR_W, thumb_h)
-        draw_rect_alpha(surface, Color.scrollbar, thumb, Radius.small)
 
     def _draw_legend(self, surface) -> None:
         x = self.area.x + PAD

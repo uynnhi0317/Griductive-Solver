@@ -1,15 +1,13 @@
 """Thanh trên (tên màn, chuyển màn, tiến độ) và thanh trạng thái (thông báo cho người chơi)"""
 
-from typing import Callable
-
 import pygame
 
-from game.character import Status
 from .component import Component
-from .theme import Color, LEVEL_COLOR, Level, Size, Space, ellipsize, get_font, render_text
-from .widgets import Button, place_buttons
+from .theme import Color, Face, LEVEL_COLOR, Level, Size, Space, ellipsize, get_font, render_text
+from .widgets import Button, Slider, place_buttons
 
 NAV_W, NAV_H = 32, 28
+HELP_LABEL = "?  How to play"
 
 
 class TopBar(Component):
@@ -54,8 +52,8 @@ class TopBar(Component):
         pygame.draw.rect(surface, Color.surface_1, r)
         pygame.draw.line(surface, Color.border, r.bottomleft, r.bottomright)
 
-        title = ellipsize(self.title, get_font(Size.h2, True), self._title_max_w)
-        t = render_text(title, Size.h2, Color.text, True)
+        title = ellipsize(self.title, get_font(Size.h2, True, Face.TYPEWRITER), self._title_max_w)
+        t = render_text(title, Size.h2, Color.text, True, Face.TYPEWRITER)
         surface.blit(t, t.get_rect(midleft=(r.x + Space.lg, r.centery)))
 
         for text, x in ((self.progress_text, self._progress_x), (self.stage_text, self._stage_x)):
@@ -65,6 +63,8 @@ class TopBar(Component):
         self.next.draw(surface)
 
 
+SLIDER_W = 240
+
 class StatusBar(Component):
     DOT_R = 5
 
@@ -72,9 +72,15 @@ class StatusBar(Component):
         self.rect = pygame.Rect(rect)
         self.message = ""
         self.level = Level.INFO
+        self.speed = Slider("Step delay", 0.2, 2.0, 0.8, 0.1)   # giây giữa hai bước của Auto Solve
+        self.fit(rect)
 
     def fit(self, rect: pygame.Rect) -> None:
         self.rect = pygame.Rect(rect)
+        self.speed.fit(pygame.Rect(rect.right - Space.lg - SLIDER_W, rect.y, SLIDER_W, rect.h))
+
+    def handle_event(self, e: pygame.event.Event) -> bool:
+        return self.speed.handle_event(e)
 
     def say(self, message: str, level: Level = Level.INFO) -> None:
         self.message, self.level = message, level
@@ -86,27 +92,32 @@ class StatusBar(Component):
         cx, cy = r.x + Space.lg + self.DOT_R, r.centery
         pygame.draw.circle(surface, LEVEL_COLOR[self.level], (cx, cy), self.DOT_R)
         x = cx + self.DOT_R + Space.sm
-        text = ellipsize(self.message, get_font(Size.body), r.right - Space.lg - x)
+        text = ellipsize(self.message, get_font(Size.body), self.speed.rect.x - Space.lg - x)
         s = render_text(text, Size.body, Color.text)
         surface.blit(s, s.get_rect(midleft=(x, cy)))
+        self.speed.draw(surface)
 
+_HINT_LABELS = ("Hint", "Reveal", "Clear") 
 
 class ActionBar(Component):
-    """Hàng nút dưới bàn cờ: phán quyết (trái), Hint / Auto Solve / Restart / Load (phải)"""
+    """
+    Hàng nút dưới bàn cờ: How to play (trái), Hint / Auto Solve / Restart / Load (phải).
+    Phán quyết Criminal / Innocent nằm trong hộp thoại mở ra khi bấm vào thẻ úp.
+    """
 
-    def __init__(self, on_verdict: Callable[[Status], None], on_verdict_blocked: Callable[[], None],
-                 on_hint, on_auto_solve, on_restart, on_load):
+    def __init__(self, on_help, on_hint, on_auto_solve, on_restart, on_load):
         self.rect = pygame.Rect(0, 0, 0, 0)
-        self.criminal = Button("Criminal", lambda: on_verdict(Status.CRIMINAL), Status.CRIMINAL,
-                               on_disabled_click=on_verdict_blocked)
-        self.innocent = Button("Innocent", lambda: on_verdict(Status.INNOCENT), Status.INNOCENT,
-                               on_disabled_click=on_verdict_blocked)
-        self._left = [self.criminal, self.innocent]
-        self._right = [Button("Hint", on_hint), Button("Auto Solve", on_auto_solve),
-                       Button("Restart", on_restart), Button("Load", on_load)]
+        self.help = Button(HELP_LABEL, on_help)        # góc dưới-trái, mở hướng dẫn chơi (giống phím F1)
+        self.hint = Button("Hint", on_hint)
+        self.auto = Button("Auto Solve", on_auto_solve, width_hint="Auto Solve")
+        self._left = [self.help]
+        self._right = [self.hint, self.auto, Button("Restart", on_restart), Button("Load", on_load)]
 
-    def set_verdict_enabled(self, enabled: bool) -> None:
-        self.criminal.enabled = self.innocent.enabled = enabled
+    def set_hint_stage(self, stage: int) -> None:
+        self.hint.label = _HINT_LABELS[stage]
+
+    def set_auto_running(self, running: bool) -> None:
+        self.auto.label = "Stop" if running else "Auto Solve"
 
     def fit(self, rect: pygame.Rect) -> None:
         self.rect = pygame.Rect(rect)
