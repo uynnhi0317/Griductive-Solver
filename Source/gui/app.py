@@ -221,7 +221,8 @@ class App:
 
         if outcome is VerdictOutcome.ACCEPTED:
             self.log.clear_end()
-            self._sync_views()          # thẻ lật, clue mới vào panel; ô vẫn được chọn nên clue của nó được highlight
+            self.selected = None        # bỏ chọn: bàn cờ trở lại bình thường, bấm vào thẻ mới xem clue vừa lộ
+            self._sync_views()          # thẻ lật, clue mới vào panel
             if self.engine.is_solved():
                 msg = f"Solved! {who} is {status.value}, last card revealed ({queries})."
                 self._say(msg, Level.OK)
