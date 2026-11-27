@@ -51,6 +51,9 @@ class Color:
     innocent = _hex("39775A")        # muted forest green
 
     badge_bg = _hex("342B22")        # dark ink badge
+    on_status = _hex("FBF6EC")       # chữ / ký hiệu trên nền đậm (nút phán quyết, huy hiệu)
+    verdict_criminal = _hex("AE4F48")  # nút Criminal: sáng hơn criminal, chữ on_status vẫn 4.9:1
+    verdict_innocent = _hex("3C7E5D")  # nút Innocent: sáng hơn innocent, chữ on_status vẫn 4.5:1
 
     # thẻ đã lật — giấy sáng, verdict tint nhẹ
     card_face = _hex("F2E8D5")       # warm ivory paper
@@ -127,6 +130,10 @@ STATUS_COLOR = {
 FACE_COLOR = {          # nền thẻ đã lật, chữ card_text trên nền này vẫn tương phản >= 5.5:1
     Status.CRIMINAL: Color.card_face_criminal,
     Status.INNOCENT: Color.card_face_innocent,
+}
+VERDICT_COLOR = {       # nền nút phán quyết (STATUS_COLOR vẫn dùng cho viền thẻ, huy hiệu panel)
+    Status.CRIMINAL: Color.verdict_criminal,
+    Status.INNOCENT: Color.verdict_innocent,
 }
 STAMP_COLOR = {
     Status.CRIMINAL: Color.stamp_criminal,
@@ -256,15 +263,15 @@ def draw_status_icon(surface: pygame.Surface, status: Status, cx: int, cy: int, 
     trong vòng tròn tối. Dùng chung cho thẻ và panel để hai nơi luôn khớp nhau.
     """
     pygame.draw.circle(surface, Color.badge_bg, (cx, cy), r)
-    pygame.draw.circle(surface, Color.text, (cx, cy), r, width=max(1, r // 7))
+    pygame.draw.circle(surface, Color.on_status, (cx, cy), r, width=max(1, r // 7))
     d = r * 0.42
     width = max(2, r // 4)
     if status is Status.CRIMINAL:
-        pygame.draw.line(surface, Color.text, (cx - d, cy - d), (cx + d, cy + d), width)
-        pygame.draw.line(surface, Color.text, (cx - d, cy + d), (cx + d, cy - d), width)
+        pygame.draw.line(surface, Color.on_status, (cx - d, cy - d), (cx + d, cy + d), width)
+        pygame.draw.line(surface, Color.on_status, (cx - d, cy + d), (cx + d, cy - d), width)
     else:
         pts = [(cx - d, cy + d * 0.05), (cx - d * 0.25, cy + d * 0.8), (cx + d, cy - d * 0.7)]
-        pygame.draw.lines(surface, Color.text, False, pts, width)
+        pygame.draw.lines(surface, Color.on_status, False, pts, width)
 
 def draw_scrollbar(surface: pygame.Surface, vp: pygame.Rect, content_h: int, scroll: int, max_scroll: int) -> None:
         if max_scroll <= 0:

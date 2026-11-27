@@ -6,7 +6,7 @@ import pygame
 from game.character import Status
 from .component import Component
 from .theme import (
-    Color, Face, LEVEL_COLOR, Level, Radius, Size, Space, Stroke, STATUS_COLOR,
+    Color, Face, LEVEL_COLOR, Level, Radius, Size, Space, Stroke, VERDICT_COLOR,
     draw_rect_alpha, draw_status_icon, ellipsize, get_font, render_text,
 )
 
@@ -68,7 +68,7 @@ class Button(Component):
         r = self.rect
         colored = self.status is not None and self.enabled
         if colored:
-            fill = STATUS_COLOR[self.status]
+            fill = VERDICT_COLOR[self.status]
         elif not self.enabled:
             fill = Color.surface_1
         else:
@@ -82,7 +82,10 @@ class Button(Component):
         if self._pressed and self.enabled:
             pygame.draw.rect(surface, Color.focus, r, width=Stroke.medium, border_radius=Radius.control)
 
-        color = Color.text if self.enabled else Color.text_disabled
+        if colored:                     # nền đỏ / xanh đậm -> chữ sáng
+            color = Color.on_status
+        else:
+            color = Color.text if self.enabled else Color.text_disabled
         text = render_text(self.label, Size.body, color, True)
         x = r.centerx - (self._icon_w + text.get_width()) // 2
         if self.status is not None:
