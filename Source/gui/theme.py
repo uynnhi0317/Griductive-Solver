@@ -25,43 +25,49 @@ def _hex(value: str, alpha: int = 255) -> tuple[int, int, int, int]:
 
 class Color:
     # nền và bề mặt (sáng dần theo độ nổi)
-    bg = _hex("12101A")
-    surface_1 = _hex("1B1826")       # panel, toolbar
-    surface_2 = _hex("262235")       # dòng clue, nút
-    surface_3 = _hex("322D45")       # hover trên surface
-    border = _hex("3A3552")          # đường chia, viền panel
+    bg = _hex("151310")              # ink black
+    surface_1 = _hex("211C18")       # dark walnut: panel, toolbar
+    surface_2 = _hex("2B251F")       # dòng clue, nút
+    surface_3 = _hex("38302A")       # hover trên surface
+    border = _hex("4A3E2D")          # đường chia, viền panel (brass tối hơn để không quá nặng)
 
-    # chữ
-    text = _hex("EDE9FF")
-    text_dim = _hex("A9A2C7")
-    text_disabled = _hex("6B6585")
-    scrollbar = _hex("A9A2C7", 140)
+    # chữ trên nền tối
+    text = _hex("F5EEDC")            # ivory
+    text_dim = _hex("A8957D")        # faded sepia, sáng hơn một chút so với 8D7964 để đủ tương phản
+    text_disabled = _hex("6E6253")
+    scrollbar = _hex("A8957D", 140)
+
+    # chữ trên thẻ úp (giấy da)
+    card_text = _hex("34271F")       # dark brown
+    card_text_dim = _hex("4A3C2E")
 
     # thẻ
-    card_back = _hex("2F2B44")       # thẻ úp, tương phản với text ~11:1
-    card_back_hover = _hex("3A3556")
-    card_border = _hex("5A5380")
-    criminal = _hex("B8323F")
-    innocent = _hex("17795A")
-    badge_bg = _hex("12101A")        # nền huy hiệu trạng thái, luôn tối để biểu tượng sáng nổi lên
+    card_back = _hex("C5AD88")       # aged parchment
+    card_back_hover = _hex("D3BD99")
+    card_border = _hex("6D573A")     # aged brass
+    criminal = _hex("963F3B")        # muted burgundy
+    innocent = _hex("39775A")        # muted forest green
+    badge_bg = _hex("151310")
 
-    # tương tác (cố ý trung tính để không đụng với 3 màu role và 2 màu trạng thái)
-    focus = _hex("F4F1FF")
-    hint = _hex("FF9F43")
+    # tương tác
+    accent = _hex("C49A58")          # antique gold, chỉ dành cho chrome, KHÔNG dùng gần vùng highlight
+    focus = _hex("F5EEDC")
+    focus_edge = _hex("151310")      # viền tối ngoài vòng focus, để vòng thấy được trên giấy da
+    hint = _hex("FF8C42")
     hover_overlay = (255, 255, 255, 22)
-    scrim = _hex("0B0912", 215)
+    scrim = _hex("0B0A08", 215)
 
     # vai trò khi highlight clue
-    role_subject = _hex("FFD84D")
-    role_counted = _hex("6FE3F5")
-    role_condition = _hex("D86BE0")
+    role_subject = _hex("D5A64A")    # antique gold
+    role_counted = _hex("54B8B8")    # dusty teal
+    role_condition = _hex("BD78C9")  # muted orchid
     role_tint = 50
 
-    # phản hồi (toast, dùng ở P2)
-    fb_info = _hex("5AA9FF")
-    fb_warn = _hex("F2B84B")
-    fb_error = _hex("FF6B6B")
-    fb_ok = _hex("4FD18B")
+    # phản hồi
+    fb_info = _hex("6FA3B8")
+    fb_warn = _hex("D9A441")
+    fb_error = _hex("D9625B")
+    fb_ok = _hex("6FB58A")
 
 
 class Space:

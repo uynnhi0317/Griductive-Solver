@@ -120,16 +120,17 @@ class CharacterCard:
         w, h = self.rect.size
         face = self._blank(fill)
         pygame.draw.rect(face, Color.card_border, face.get_rect(), width=Stroke.thin, border_radius=self.RADIUS)
-        self._blit_centered_name_job(face, w, h)
+        self._blit_centered_name_job(face, w, h, Color.card_text, Color.card_text_dim)
         return face
 
-    def _blit_centered_name_job(self, face: pygame.Surface, w: int, h: int) -> None:
+    def _blit_centered_name_job(self, face: pygame.Surface, w: int, h: int,
+                                ink=Color.text, ink_dim=Color.text_dim) -> None:
         ch = self.model.character
         max_w = w - 2 * Space.md
         font, text = fit_line(ch.name, h // 5, max_w, bold=True)
-        name = font.render(text, True, Color.text)
+        name = font.render(text, True, ink)
         font, text = fit_line(ch.profession, h // 7, max_w)
-        job = font.render(text, True, Color.text_dim)
+        job = font.render(text, True, ink_dim)
         face.blit(name, name.get_rect(center=(w // 2, h * 2 // 5)))
         face.blit(job, job.get_rect(center=(w // 2, h * 3 // 5)))
 
@@ -149,7 +150,7 @@ class CharacterCard:
             return face
 
         if m.clue_text is None:
-            self._blit_centered_name_job(face, w, h)
+            self._blit_centered_name_job(face, w, h, Color.card_text, Color.card_text_dim)
         else:
             self._blit_header(face, w, h, badge_r)
             area = pygame.Rect(Space.sm, h * 22 // 100, w - 2 * Space.sm, h * 60 // 100)
@@ -233,8 +234,12 @@ class CharacterCard:
             draw_rect_alpha(surface, Color.hover_overlay, r, self.RADIUS)
 
         if selected:
-            pygame.draw.rect(surface, Color.focus, r, width=min(Stroke.thick, max(1, w // 2)),
-                             border_radius=self.RADIUS)
+            ring_w = min(Stroke.thick, max(1, w // 2))
+            pygame.draw.rect(surface, Color.focus_edge, r, width=ring_w, border_radius=self.RADIUS)
+            inner = r.inflate(-2 * ring_w, -2 * ring_w)
+            if inner.w > 4 and inner.h > 4:
+                pygame.draw.rect(surface, Color.focus, inner, width=Stroke.medium,
+                                 border_radius=max(0, self.RADIUS - ring_w))
 
         if self.role is not None:
             color = ROLE_COLOR[self.role]
