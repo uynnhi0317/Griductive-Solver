@@ -1170,14 +1170,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             generate_plots=not args.no_plots,
             quiet=args.quiet,
         )
+        csv_count = sum(1 for p in written if p.suffix.lower() == ".csv")
+        plot_count = len(written) - csv_count
+        detail = f"{csv_count} bảng CSV, {plot_count} biểu đồ"
+
         if plot_failures:
             print(
                 f"\nLỗi: {len(plot_failures)} biểu đồ không được tạo: {', '.join(plot_failures)}",
                 file=sys.stderr,
             )
-            print(f"Đã tạo {len(written)} sản phẩm tại: {args.out_dir}", file=sys.stderr)
+            print(f"Đã tạo {len(written)} sản phẩm ({detail}) tại: {args.out_dir}", file=sys.stderr)
             return 3
-        print(f"\nHoàn tất task T22! Đã tạo {len(written)} sản phẩm tại: {args.out_dir}")
+        print(f"\nHoàn tất task T22! Đã tạo {len(written)} sản phẩm ({detail}) tại: {args.out_dir}")
         return 0
     except Exception as exc:
         print(f"Lỗi thực thi: {exc}", file=sys.stderr)
