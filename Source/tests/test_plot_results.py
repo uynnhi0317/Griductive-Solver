@@ -17,7 +17,16 @@ import pytest
 from experiments.plot_results import (
     DEFAULT_STEPS_FILE,
     DEFAULT_SUMMARY_FILE,
+    OUTCOME_AGENT_TIMEOUT,
+    OUTCOME_AMBIGUOUS,
+    OUTCOME_ERROR,
+    OUTCOME_INCONSISTENT,
+    OUTCOME_LOAD_ERROR,
+    OUTCOME_ORDER,
+    OUTCOME_SOLVED,
+    OUTCOME_UNIQ_TIMEOUT,
     analyze_failures_and_timeouts,
+    classify_outcomes,
     compute_model_reuse_comparison,
     compute_summary_by_size,
     generate_all_plots_and_tables,
@@ -169,6 +178,10 @@ def test_analyze_failures_all_success(sample_summary_df: pd.DataFrame) -> None:
     assert res["exec_error_count"] == 0
     assert res["load_error_count"] == 0
     assert res["failure_count"] == 0
+    assert res["unique_count"] == 6
+    assert res["verdicts_correct_count"] == 6
+    assert res["outcome_counts"][OUTCOME_SOLVED] == 6
+    assert sum(res["outcome_counts"].values()) == res["total_runs"]
     assert len(res["failure_rows"]) == 0
     assert "3x3" in res["breakdown_by_size"]
 
@@ -179,25 +192,96 @@ def test_analyze_failures_with_injected_errors() -> None:
         {"puzzle_id": "3x3_01", "size": 3, "size_label": "3x3", "model_reuse": "on", "run": 1, "status": "SOLVED", "error": "", "uniqueness": "UNIQUE"},
         {"puzzle_id": "4x4_bad", "size": 4, "size_label": "4x4", "model_reuse": "on", "run": 1, "status": "LOAD_ERROR", "error": "load: FileNotFoundError: bad.json", "uniqueness": "-"},
         {"puzzle_id": "5x5_crash", "size": 5, "size_label": "5x5", "model_reuse": "off", "run": 1, "status": "ERROR", "error": "deduction: EngineInvariantError: rejected", "uniqueness": "UNIQUE"},
-        {"puzzle_id": "5x5_slow", "size": 5, "size_label": "5x5", "model_reuse": "off", "run": 1, "status": "TIMEOUT", "error": "", "uniqueness": "TIMEOUT"},
+        {"puzzle_id": "5x5_slow", "size": 5, "size_label": "5x5", "model_reuse": "off", "run": 1, "status": "TIMEOUT", "error": "TimeoutError: exceeded limit", "uniqueness": "TIMEOUT"},
     ])
     res = analyze_failures_and_timeouts(df)
     assert res["total_runs"] == 4
     assert res["solved_count"] == 1
     assert res["load_error_count"] == 1
-    assert res["exec_error_count"] == 2  # ERROR status và hàng có lỗi
+    assert res["exec_error_count"] == 1  # LOAD_ERROR và TIMEOUT không cộng vào ERROR
+    assert res["agent_timeout_count"] == 1
+    assert res["uniq_timeout_count"] == 0
     assert res["timeout_count"] == 1
     assert res["failure_count"] == 3
+
+    assert res["outcome_counts"] == {
+        OUTCOME_SOLVED: 1,
+        OUTCOME_AGENT_TIMEOUT: 1,
+        OUTCOME_UNIQ_TIMEOUT: 0,
+        OUTCOME_AMBIGUOUS: 0,
+        OUTCOME_INCONSISTENT: 0,
+        OUTCOME_LOAD_ERROR: 1,
+        OUTCOME_ERROR: 1,
+    }
+    assert sum(res["outcome_counts"].values()) == res["total_runs"]
 
     assert len(res["failure_rows"]) == 3
     failed_puzzles = {r["puzzle_id"] for r in res["failure_rows"]}
     assert failed_puzzles == {"4x4_bad", "5x5_crash", "5x5_slow"}
 
-    # Kiểm tra breakdown theo size
+    # Kiểm tra breakdown theo size, các nhóm không chồng lấn
     b = res["breakdown_by_size"]
     assert b["3x3"]["solved"] == 1
-    assert b["4x4"]["error"] == 1
+    assert b["4x4"]["load_error"] == 1
+    assert b["4x4"]["error"] == 0
+    assert b["5x5"]["agent_timeout"] == 1
     assert b["5x5"]["timeout"] == 1
+    assert b["5x5"]["error"] == 1
+    for stats in b.values():
+        assert sum(stats["outcome_counts"].values()) == stats["total"]
+
+
+def test_solved_but_non_unique_or_wrong_verdict_is_failure() -> None:
+    """SOLVED chỉ được coi là thành công khi uniqueness=UNIQUE và verdicts_correct=True"""
+    df = pd.DataFrame([
+        {"puzzle_id": "a", "size": 3, "size_label": "3x3", "model_reuse": "on", "run": 1, "status": "SOLVED", "error": "", "uniqueness": "MULTIPLE", "verdicts_correct": "True"},
+        {"puzzle_id": "b", "size": 3, "size_label": "3x3", "model_reuse": "on", "run": 1, "status": "SOLVED", "error": "", "uniqueness": "NO_SOLUTION", "verdicts_correct": "True"},
+        {"puzzle_id": "c", "size": 3, "size_label": "3x3", "model_reuse": "on", "run": 1, "status": "SOLVED", "error": "", "uniqueness": "UNIQUE", "verdicts_correct": "False"},
+        {"puzzle_id": "d", "size": 3, "size_label": "3x3", "model_reuse": "on", "run": 1, "status": "SOLVED", "error": "", "uniqueness": "UNIQUE", "verdicts_correct": "True"},
+    ])
+    res = analyze_failures_and_timeouts(df)
+    assert res["solved_count"] == 1
+    assert res["ambiguous_count"] == 1
+    assert res["inconsistent_count"] == 1
+    assert res["exec_error_count"] == 1
+    assert res["failure_count"] == 3
+    assert res["unique_count"] == 2
+    assert res["verdicts_correct_count"] == 3
+    assert set(classify_outcomes(df)) == {
+        OUTCOME_AMBIGUOUS, OUTCOME_INCONSISTENT, OUTCOME_ERROR, OUTCOME_SOLVED,
+    }
+
+
+def test_solved_with_uniq_timeout_is_not_double_counted() -> None:
+    df = pd.DataFrame([
+        {"puzzle_id": "a", "size": 4, "size_label": "4x4", "model_reuse": "on", "run": 1, "status": "SOLVED", "error": "", "uniqueness": "TIMEOUT", "verdicts_correct": "True"},
+    ])
+    res = analyze_failures_and_timeouts(df)
+    assert res["solved_count"] == 0
+    assert res["agent_timeout_count"] == 0
+    assert res["uniq_timeout_count"] == 1
+    assert res["failure_count"] == 1
+    assert res["outcome_counts"][OUTCOME_UNIQ_TIMEOUT] == 1
+
+
+def test_outcomes_are_mutually_exclusive(sample_summary_df: pd.DataFrame) -> None:
+    outcome = classify_outcomes(sample_summary_df)
+    assert len(outcome) == len(sample_summary_df)
+    assert set(outcome).issubset(set(OUTCOME_ORDER))
+    res = analyze_failures_and_timeouts(sample_summary_df)
+    assert sum(res["outcome_counts"].values()) == res["total_runs"]
+
+
+def test_load_summary_data_missing_error_is_not_exec_error() -> None:
+    """Ô error trống phải là NaN/chuỗi rỗng, không được biến thành 'nan' và bị đếm là lỗi"""
+    if not DEFAULT_SUMMARY_FILE.is_file():
+        pytest.skip("benchmark_summary.csv chưa được tạo")
+
+    df = load_summary_data(DEFAULT_SUMMARY_FILE)
+    solved_rows = df[df["status"] == "SOLVED"]
+    assert not (solved_rows["error"] == "nan").any()
+    res = analyze_failures_and_timeouts(df)
+    assert res["exec_error_count"] == 0
 
 
 # ==============================================================================
@@ -235,6 +319,24 @@ def test_generate_report_tables(sample_summary_df: pd.DataFrame, tmp_path: Path)
     txt_text = res["text"]
     assert "FAILURES & TIMEOUTS" in txt_text
     assert "MODEL REUSE" in txt_text
+    assert "AGENT_TIMEOUT" in txt_text
+    assert "UNIQ_TIMEOUT" in txt_text
+    assert "AMBIGUOUS" in txt_text
+    assert "INCONSISTENT" in txt_text
+
+
+def test_report_note_uses_real_counts(sample_summary_df: pd.DataFrame, tmp_path: Path) -> None:
+    """Thông báo phải sinh từ dữ liệu thật, không hardcode 100% đúng/duy nhất"""
+    df = sample_summary_df.copy()
+    df.loc[df.index[0], "uniqueness"] = "MULTIPLE"
+
+    res = generate_report_tables(df, tmp_path)
+    text = res["text"]
+
+    assert "5/6 lượt có uniqueness=UNIQUE" in text
+    assert "6/6 lượt có verdicts_correct=True" in text
+    assert "100% các câu đố" not in text
+    assert "AMBIGUOUS" in text
 
 
 # ==============================================================================
@@ -245,13 +347,13 @@ def test_all_plots_generation(sample_summary_df: pd.DataFrame, tmp_path: Path) -
     """Kiểm tra gọi tất cả các hàm vẽ biểu đồ sinh file ảnh hợp lệ (không rỗng)"""
     dpi = 50  # DPI thấp để test chạy nhanh
 
-    plot_runtime_comparison(sample_summary_df, tmp_path / "runtime.png", dpi)
-    plot_sat_calls(sample_summary_df, tmp_path / "sat_calls.png", dpi)
-    plot_solver_operations(sample_summary_df, tmp_path / "solver_ops.png", dpi)
-    plot_encoding_complexity(sample_summary_df, tmp_path / "encoding.png", dpi)
-    plot_speedup_and_savings(sample_summary_df, tmp_path / "savings.png", dpi)
-    plot_status_distribution(sample_summary_df, tmp_path / "status.png", dpi)
-    plot_overview_dashboard(sample_summary_df, tmp_path / "dashboard.png", dpi)
+    assert plot_runtime_comparison(sample_summary_df, tmp_path / "runtime.png", dpi) is True
+    assert plot_sat_calls(sample_summary_df, tmp_path / "sat_calls.png", dpi) is True
+    assert plot_solver_operations(sample_summary_df, tmp_path / "solver_ops.png", dpi) is True
+    assert plot_encoding_complexity(sample_summary_df, tmp_path / "encoding.png", dpi) is True
+    assert plot_speedup_and_savings(sample_summary_df, tmp_path / "savings.png", dpi) is True
+    assert plot_status_distribution(sample_summary_df, tmp_path / "status.png", dpi) is True
+    assert plot_overview_dashboard(sample_summary_df, tmp_path / "dashboard.png", dpi) is True
 
     expected_plots = [
         "runtime.png", "sat_calls.png", "solver_ops.png",
@@ -263,6 +365,18 @@ def test_all_plots_generation(sample_summary_df: pd.DataFrame, tmp_path: Path) -
         assert f.stat().st_size > 0, f"Biểu đồ {p} bị rỗng"
 
 
+def test_plot_functions_return_false_without_data(tmp_path: Path) -> None:
+    empty = pd.DataFrame({"status": [], "size_label": [], "model_reuse": []})
+    assert plot_runtime_comparison(empty, tmp_path / "runtime.png") is False
+    assert plot_sat_calls(empty, tmp_path / "sat_calls.png") is False
+    assert plot_solver_operations(empty, tmp_path / "solver_ops.png") is False
+    assert plot_encoding_complexity(empty, tmp_path / "encoding.png") is False
+    assert plot_speedup_and_savings(empty, tmp_path / "savings.png") is False
+    assert plot_status_distribution(empty, tmp_path / "status.png") is False
+    assert plot_overview_dashboard(empty, tmp_path / "dashboard.png") is False
+    assert not list(tmp_path.glob("*.png"))
+
+
 def test_step_dynamics_plot(tmp_path: Path) -> None:
     steps_df = pd.DataFrame([
         {"puzzle_id": "3x3_01", "size": 3, "model_reuse": "on", "run": 1, "step": 1, "num_active_clues": 1, "sat_queries": 9},
@@ -270,7 +384,7 @@ def test_step_dynamics_plot(tmp_path: Path) -> None:
         {"puzzle_id": "4x4_01", "size": 4, "model_reuse": "on", "run": 1, "step": 1, "num_active_clues": 2, "sat_queries": 15},
     ])
     out_file = tmp_path / "step_dynamics.png"
-    plot_step_dynamics(steps_df, out_file, dpi=50)
+    assert plot_step_dynamics(steps_df, out_file, dpi=50) is True
     assert out_file.is_file()
     assert out_file.stat().st_size > 0
 
@@ -283,6 +397,41 @@ def test_cli_main_help() -> None:
     with pytest.raises(SystemExit) as excinfo:
         main(["--help"])
     assert excinfo.value.code == 0
+
+
+def test_generate_all_returns_files_and_no_failures(tmp_path: Path) -> None:
+    if not DEFAULT_SUMMARY_FILE.is_file():
+        pytest.skip("benchmark_summary.csv chưa có")
+
+    files, failures = generate_all_plots_and_tables(
+        summary_path=DEFAULT_SUMMARY_FILE,
+        steps_path=DEFAULT_STEPS_FILE,
+        out_dir=tmp_path,
+        dpi=50,
+        quiet=True,
+    )
+    assert failures == []
+    assert files
+    assert all(p.is_file() for p in files)
+    assert (tmp_path / "overview_dashboard.png") in files
+
+
+def test_cli_main_plot_failure_returns_nonzero(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    if not DEFAULT_SUMMARY_FILE.is_file():
+        pytest.skip("benchmark_summary.csv chưa có")
+
+    def boom(*args: Any, **kwargs: Any) -> bool:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("experiments.plot_results.plot_runtime_comparison", boom)
+    exit_code = main([
+        "--summary-csv", str(DEFAULT_SUMMARY_FILE),
+        "--steps-csv", str(DEFAULT_STEPS_FILE),
+        "--out-dir", str(tmp_path),
+        "--dpi", "50",
+        "--quiet",
+    ])
+    assert exit_code == 3
 
 
 def test_cli_main_execution(tmp_path: Path) -> None:
@@ -305,3 +454,14 @@ def test_cli_main_execution(tmp_path: Path) -> None:
 def test_cli_main_not_found_csv(tmp_path: Path) -> None:
     exit_code = main(["--summary-csv", str(tmp_path / "nonexistent.csv")])
     assert exit_code == 1
+
+
+def test_solved_but_non_unique_or_wrong_verdict_excluded_from_metrics(sample_summary_df: pd.DataFrame) -> None:
+    """Lượt SOLVED nhưng uniqueness != UNIQUE hoặc verdicts_correct=False không được tính vào bảng hiệu năng"""
+    df = sample_summary_df.copy()
+    df.loc[df.index[0], "uniqueness"] = "MULTIPLE"
+    df.loc[df.index[1], "verdicts_correct"] = "False"
+
+    summary = compute_summary_by_size(df)
+    assert "3x3" not in set(summary["Kích thước"])
+    assert summary["Số lượt chạy"].sum() == 4

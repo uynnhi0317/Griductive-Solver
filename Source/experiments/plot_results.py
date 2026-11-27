@@ -51,6 +51,35 @@ COLORS = {
     "cyan": "#17becf",      # Xanh lam
 }
 
+# Kết cục loại trừ lẫn nhau của một lượt chạy; mọi bảng đếm và biểu đồ đều dựng từ đây
+OUTCOME_SOLVED = "SOLVED"
+OUTCOME_AGENT_TIMEOUT = "AGENT_TIMEOUT"
+OUTCOME_UNIQ_TIMEOUT = "UNIQ_TIMEOUT"
+OUTCOME_AMBIGUOUS = "AMBIGUOUS"
+OUTCOME_INCONSISTENT = "INCONSISTENT"
+OUTCOME_LOAD_ERROR = "LOAD_ERROR"
+OUTCOME_ERROR = "ERROR"
+
+OUTCOME_ORDER = (
+    OUTCOME_SOLVED,
+    OUTCOME_AGENT_TIMEOUT,
+    OUTCOME_UNIQ_TIMEOUT,
+    OUTCOME_AMBIGUOUS,
+    OUTCOME_INCONSISTENT,
+    OUTCOME_LOAD_ERROR,
+    OUTCOME_ERROR,
+)
+
+OUTCOME_COLORS = {
+    OUTCOME_SOLVED: "#2ca02c",
+    OUTCOME_AGENT_TIMEOUT: "#ff7f0e",
+    OUTCOME_UNIQ_TIMEOUT: "#ffbb78",
+    OUTCOME_AMBIGUOUS: "#9467bd",
+    OUTCOME_INCONSISTENT: "#8c564b",
+    OUTCOME_LOAD_ERROR: "#7f7f7f",
+    OUTCOME_ERROR: "#d62728",
+}
+
 NUMERIC_COLUMNS = [
     "size", "run", "full_main_vars", "full_aux_vars", "full_clauses",
     "kb0_clauses", "kb_final_main_vars", "kb_final_aux_vars", "kb_final_clauses",
@@ -60,6 +89,49 @@ NUMERIC_COLUMNS = [
     "uniq_sat_calls", "uniq_decisions", "uniq_propagations",
     "uniq_pure_literals", "uniq_backtracks", "uniq_solver_time", "uniq_runtime",
 ]
+
+_TRUE_TEXT = {"true", "1", "yes"}
+
+
+def _column_or_default(df: pd.DataFrame, column: str, default: Any) -> pd.Series:
+    """Lấy cột nếu có, ngược lại trả về Series hằng để tránh lỗi KeyError"""
+    if column in df.columns:
+        return df[column]
+    return pd.Series([default] * len(df), index=df.index)
+
+
+def _normalized_text(series: pd.Series) -> pd.Series:
+    """Chuẩn hoá chuỗi: bỏ khoảng trắng, chữ hoa, gộp mọi giá trị thiếu thành chuỗi rỗng"""
+    return series.fillna("").astype(str).str.strip().str.upper()
+
+
+def _verdicts_true_mask(df: pd.DataFrame) -> pd.Series:
+    """Các dòng có verdicts_correct được đánh giá là đúng"""
+    if "verdicts_correct" not in df.columns:
+        return pd.Series(False, index=df.index)
+    text = df["verdicts_correct"].fillna("").astype(str).str.strip().str.lower()
+    return text.isin(_TRUE_TEXT)
+
+
+def _verdicts_not_true_mask(df: pd.DataFrame) -> pd.Series:
+    """Các dòng có verdicts_correct khác True (kể cả trống) khi cột tồn tại"""
+    if "verdicts_correct" not in df.columns:
+        return pd.Series(False, index=df.index)
+    return ~_verdicts_true_mask(df)
+
+
+def _safe_mean(series: pd.Series) -> float:
+    """Trung bình an toàn: trả về 0.0 khi rỗng hoặc toàn NaN"""
+    if series.empty:
+        return 0.0
+    value = series.mean()
+    return float(value) if pd.notna(value) else 0.0
+
+
+def _safe_max(values: Sequence[float], floor: float = 1.0) -> float:
+    """Giá trị lớn nhất hữu hạn, tránh NaN/Inf làm hỏng set_ylim"""
+    finite = [float(v) for v in values if pd.notna(v) and np.isfinite(v)]
+    return max(finite) if finite else floor
 
 
 # ĐỌC VÀ CHUẨN HOÁ DỮ LIỆU
@@ -74,9 +146,9 @@ def load_summary_data(summary_path: Path) -> pd.DataFrame:
 
     df = pd.read_csv(summary_path, dtype=str)
 
-    # Làm sạch khoảng trắng
+    # Làm sạch khoảng trắng; giữ nguyên NaN thay vì biến thành chuỗi "nan"
     for col in df.columns:
-        df[col] = df[col].astype(str).str.strip()
+        df[col] = df[col].astype(object).str.strip()
 
     # Ép kiểu các cột số (giá trị trống chuyển thành NaN)
     for col in NUMERIC_COLUMNS:
@@ -122,26 +194,87 @@ def load_steps_data(steps_path: Path) -> pd.DataFrame | None:
 
 # PHÂN TÍCH CA LỖI VÀ TIMEOUT (NÊU RÕ THEO YÊU CẦU MỤC 4.5 & 4.6)
 
+def classify_outcomes(df: pd.DataFrame) -> pd.Series:
+    """
+    Gán cho mỗi lượt chạy đúng một kết cục loại trừ lẫn nhau.
+    Thứ tự ưu tiên: LOAD_ERROR > AGENT_TIMEOUT > ERROR (tường minh) >
+    UNIQ_TIMEOUT > ERROR (error text / thiếu uniqueness / sai verdict) >
+    INCONSISTENT > AMBIGUOUS > SOLVED.
+    """
+    status = _normalized_text(_column_or_default(df, "status", "UNKNOWN"))
+    uniqueness = _normalized_text(_column_or_default(df, "uniqueness", ""))
+    error = _normalized_text(_column_or_default(df, "error", ""))
+    solved_status = status == OUTCOME_SOLVED
+
+    uniqueness_missing = solved_status & ~uniqueness.isin(
+        ["UNIQUE", "MULTIPLE", "NO_SOLUTION", "TIMEOUT", OUTCOME_ERROR]
+    )
+    verdict_not_true = solved_status & _verdicts_not_true_mask(df)
+
+    is_load_error = status == OUTCOME_LOAD_ERROR
+    is_agent_timeout = status == "TIMEOUT"
+    is_explicit_error = (status == OUTCOME_ERROR) | (uniqueness == OUTCOME_ERROR)
+    is_uniq_timeout = uniqueness == "TIMEOUT"
+    is_error = (
+        is_explicit_error
+        | (error != "")
+        | uniqueness_missing
+        | verdict_not_true
+    )
+    is_inconsistent = (status == OUTCOME_INCONSISTENT) | (uniqueness == "NO_SOLUTION")
+    is_ambiguous = (status == OUTCOME_AMBIGUOUS) | (uniqueness == "MULTIPLE")
+
+    outcome = np.select(
+        [is_load_error, is_agent_timeout, is_uniq_timeout, is_error, is_inconsistent, is_ambiguous],
+        [
+            OUTCOME_LOAD_ERROR,
+            OUTCOME_AGENT_TIMEOUT,
+            OUTCOME_UNIQ_TIMEOUT,
+            OUTCOME_ERROR,
+            OUTCOME_INCONSISTENT,
+            OUTCOME_AMBIGUOUS,
+        ],
+        default=OUTCOME_SOLVED,
+    )
+    outcome = pd.Series(outcome, index=df.index)
+
+    # Status lạ (không phải SOLVED) chưa rơi vào nhóm nào thì coi là lỗi thực thi
+    unclassified = (outcome == OUTCOME_SOLVED) & (status != OUTCOME_SOLVED)
+    outcome.loc[unclassified] = OUTCOME_ERROR
+    return outcome
+
+
+def _solved_only(df: pd.DataFrame) -> pd.DataFrame:
+    """Chỉ giữ các lượt chạy thực sự thành công (outcome == SOLVED)"""
+    if df.empty:
+        return df.iloc[0:0].copy()
+    return df[classify_outcomes(df) == OUTCOME_SOLVED].copy()
+
+
 def analyze_failures_and_timeouts(df: pd.DataFrame) -> dict[str, Any]:
     """
     Phân tích chi tiết các ca lỗi (LOAD_ERROR, ERROR), timeout và tính nhất quán.
-    Bảo đảm nêu rõ đầy đủ các trường hợp không thành công thay vì bỏ qua.
+    Mọi số đếm đều lấy từ cột outcome loại trừ lẫn nhau nên không bị chồng lấn.
     """
     total_runs = len(df)
-    solved_mask = df["status"] == "SOLVED"
-    timeout_mask = (df["status"] == "TIMEOUT") | (df.get("uniqueness", pd.Series()) == "TIMEOUT")
-    load_err_mask = df["status"] == "LOAD_ERROR"
-    exec_err_mask = (df["status"] == "ERROR") | (df.get("error", pd.Series()).fillna("") != "")
-    other_mask = ~solved_mask & ~timeout_mask & ~load_err_mask & ~exec_err_mask
+    outcome = classify_outcomes(df)
+    outcome_counts = {name: int((outcome == name).sum()) for name in OUTCOME_ORDER}
 
-    failure_mask = ~solved_mask | timeout_mask | exec_err_mask | load_err_mask
+    solved_mask = outcome == OUTCOME_SOLVED
+    failure_mask = ~solved_mask
 
-    status_counts = df["status"].value_counts().to_dict()
-    uniqueness_counts = df["uniqueness"].value_counts().to_dict() if "uniqueness" in df.columns else {}
+    status_counts = _column_or_default(df, "status", "UNKNOWN").value_counts().to_dict()
+    uniqueness = _normalized_text(_column_or_default(df, "uniqueness", ""))
+    uniqueness_counts = uniqueness.value_counts().to_dict()
+    unique_count = int((uniqueness == "UNIQUE").sum())
+    verdicts_correct_count = int(_verdicts_true_mask(df).sum())
 
     failure_rows: list[dict[str, Any]] = []
     if failure_mask.any():
-        for _, row in df[failure_mask].iterrows():
+        for idx, row in df[failure_mask].iterrows():
+            error_text = row.get("error", "")
+            if pd.isna(error_text) or str(error_text).strip() == "":
+                error_text = "(không có thông báo ngoại lệ)"
             failure_rows.append({
                 "puzzle_id": row.get("puzzle_id", "-"),
                 "size": row.get("size_label", "-"),
@@ -149,32 +282,47 @@ def analyze_failures_and_timeouts(df: pd.DataFrame) -> dict[str, Any]:
                 "run": row.get("run", "-"),
                 "status": row.get("status", "-"),
                 "uniqueness": row.get("uniqueness", "-"),
-                "error": row.get("error", "") or "(không có thông báo ngoại lệ)",
+                "outcome": outcome.loc[idx],
+                "error": error_text,
                 "runtime": f"{row.get('runtime', 0):.4f}s" if pd.notna(row.get("runtime")) else "-",
             })
 
-    # Phân tích theo từng kích thước
-    breakdown_by_size: dict[str, dict[str, int]] = {}
+    # Phân tích theo từng kích thước, dựng hoàn toàn từ outcome
+    breakdown_by_size: dict[str, dict[str, Any]] = {}
     sizes = sorted(df["size_label"].unique())
     for s in sizes:
         sub = df[df["size_label"] == s]
+        sub_outcome = outcome.loc[sub.index]
+        counts = {name: int((sub_outcome == name).sum()) for name in OUTCOME_ORDER}
         breakdown_by_size[s] = {
             "total": len(sub),
-            "solved": int((sub["status"] == "SOLVED").sum()),
-            "timeout": int(((sub["status"] == "TIMEOUT") | (sub.get("uniqueness", pd.Series()) == "TIMEOUT")).sum()),
-            "error": int(((sub["status"].isin(["ERROR", "LOAD_ERROR"])) | (sub.get("error", pd.Series()).fillna("") != "")).sum()),
+            "solved": counts[OUTCOME_SOLVED],
+            "agent_timeout": counts[OUTCOME_AGENT_TIMEOUT],
+            "uniq_timeout": counts[OUTCOME_UNIQ_TIMEOUT],
+            "timeout": counts[OUTCOME_AGENT_TIMEOUT] + counts[OUTCOME_UNIQ_TIMEOUT],
+            "ambiguous": counts[OUTCOME_AMBIGUOUS],
+            "inconsistent": counts[OUTCOME_INCONSISTENT],
+            "load_error": counts[OUTCOME_LOAD_ERROR],
+            "error": counts[OUTCOME_ERROR],
+            "outcome_counts": counts,
         }
 
     return {
         "total_runs": total_runs,
-        "solved_count": int(solved_mask.sum()),
-        "timeout_count": int(timeout_mask.sum()),
-        "load_error_count": int(load_err_mask.sum()),
-        "exec_error_count": int(exec_err_mask.sum()),
-        "other_count": int(other_mask.sum()),
-        "failure_count": len(failure_rows),
+        "solved_count": outcome_counts[OUTCOME_SOLVED],
+        "agent_timeout_count": outcome_counts[OUTCOME_AGENT_TIMEOUT],
+        "uniq_timeout_count": outcome_counts[OUTCOME_UNIQ_TIMEOUT],
+        "timeout_count": outcome_counts[OUTCOME_AGENT_TIMEOUT] + outcome_counts[OUTCOME_UNIQ_TIMEOUT],
+        "load_error_count": outcome_counts[OUTCOME_LOAD_ERROR],
+        "exec_error_count": outcome_counts[OUTCOME_ERROR],
+        "ambiguous_count": outcome_counts[OUTCOME_AMBIGUOUS],
+        "inconsistent_count": outcome_counts[OUTCOME_INCONSISTENT],
+        "failure_count": int(failure_mask.sum()),
+        "unique_count": unique_count,
+        "verdicts_correct_count": verdicts_correct_count,
         "status_counts": status_counts,
         "uniqueness_counts": uniqueness_counts,
+        "outcome_counts": outcome_counts,
         "failure_rows": failure_rows,
         "breakdown_by_size": breakdown_by_size,
     }
@@ -187,7 +335,7 @@ def compute_summary_by_size(df: pd.DataFrame) -> pd.DataFrame:
     Tính các chỉ số thống kê trung bình, độ lệch chuẩn theo (size_label, model_reuse)
     trên các lượt chạy thành công (SOLVED).
     """
-    solved_df = df[df["status"] == "SOLVED"].copy()
+    solved_df = _solved_only(df)
     if solved_df.empty:
         return pd.DataFrame()
 
@@ -255,7 +403,7 @@ def compute_model_reuse_comparison(df: pd.DataFrame) -> pd.DataFrame:
     So sánh trực tiếp từng kích thước giữa model_reuse="on" và model_reuse="off".
     Tính tỉ lệ tiết kiệm SAT calls (%), tỉ lệ giảm thời gian (%) và hệ số tăng tốc (Speedup).
     """
-    solved_df = df[df["status"] == "SOLVED"].copy()
+    solved_df = _solved_only(df)
     if solved_df.empty:
         return pd.DataFrame()
 
@@ -326,37 +474,56 @@ def generate_report_tables(df: pd.DataFrame, out_dir: Path) -> dict[str, str]:
     txt_sections.append("1. TÌNH TRẠNG THỰC THI, LỖI VÀ QUÁ THỜI GIAN (FAILURES & TIMEOUTS)")
     txt_sections.append("================================================================================")
 
+    total_runs = failure_info["total_runs"]
     f_text = [
-        f"- Tổng số lượt chạy thực nghiệm: {failure_info['total_runs']}",
-        f"- Số lượt giải thành công (SOLVED): {failure_info['solved_count']} ({failure_info['solved_count'] / max(failure_info['total_runs'], 1) * 100:.1f}%)",
-        f"- Số lượt quá thời gian (TIMEOUT): {failure_info['timeout_count']}",
+        f"- Tổng số lượt chạy thực nghiệm: {total_runs}",
+        f"- Số lượt giải thành công (SOLVED): {failure_info['solved_count']} ({failure_info['solved_count'] / max(total_runs, 1) * 100:.1f}%)",
+        f"- Số lượt agent quá thời gian (AGENT_TIMEOUT): {failure_info['agent_timeout_count']}",
+        f"- Số lượt uniqueness quá thời gian (UNIQ_TIMEOUT): {failure_info['uniq_timeout_count']}",
+        f"- Số lượt mơ hồ (AMBIGUOUS): {failure_info['ambiguous_count']}",
+        f"- Số lượt mâu thuẫn (INCONSISTENT): {failure_info['inconsistent_count']}",
         f"- Số lượt lỗi tải (LOAD_ERROR): {failure_info['load_error_count']}",
         f"- Số lượt lỗi thực thi (ERROR): {failure_info['exec_error_count']}",
+        f"- Tổng số lượt không thành công: {failure_info['failure_count']}",
     ]
 
     txt_sections.extend(f_text)
 
-    # Bảng phân rã theo kích thước
+    # Bảng phân rã theo kích thước, mỗi dòng cộng lại đúng bằng tổng số lượt chạy
     breakdown_rows = []
     for s, stats in failure_info["breakdown_by_size"].items():
         succ_rate = (stats["solved"] / max(stats["total"], 1)) * 100.0
-        breakdown_rows.append([s, stats["total"], stats["solved"], stats["timeout"], stats["error"], f"{succ_rate:.1f}%"])
+        breakdown_rows.append([
+            s, stats["total"], stats["solved"], stats["agent_timeout"], stats["uniq_timeout"],
+            stats["ambiguous"], stats["inconsistent"], stats["load_error"], stats["error"],
+            f"{succ_rate:.1f}%",
+        ])
 
-    breakdown_headers = ["Kích thước", "Tổng lượt chạy", "SOLVED", "TIMEOUT", "ERROR", "Tỷ lệ thành công"]
+    breakdown_headers = [
+        "Kích thước", "Tổng lượt chạy", "SOLVED", "AGENT_TIMEOUT", "UNIQ_TIMEOUT",
+        "AMBIGUOUS", "INCONSISTENT", "LOAD_ERROR", "ERROR", "Tỷ lệ thành công",
+    ]
     txt_sections.append("\nPhan bo theo kich thuoc puzzle:")
     txt_sections.append(tabulate(breakdown_rows, headers=breakdown_headers, tablefmt="grid"))
 
+    # Thông báo sinh từ số liệu thật, không hardcode tỉ lệ 100%
+    unique_count = failure_info["unique_count"]
+    verdicts_correct_count = failure_info["verdicts_correct_count"]
+    msg = (
+        "\n> **Ghi chú về ca lỗi và tính đúng đắn:** "
+        f"Trong {total_runs} lượt chạy, {failure_info['solved_count']} lượt SOLVED; "
+        f"{unique_count}/{total_runs} lượt có uniqueness=UNIQUE; "
+        f"{verdicts_correct_count}/{total_runs} lượt có verdicts_correct=True."
+    )
     if failure_info["failure_count"] == 0:
-        msg = (
-            "\n> **Ghi chú đặc biệt về ca lỗi:** Không ghi nhận bất kỳ ca lỗi (ERROR, LOAD_ERROR) "
-            "hay timeout nào trong toàn bộ tập thử nghiệm chuẩn (3x3, 4x4, 5x5). "
-            "100% các câu đố đều được giải thành công (SOLVED), phán quyết hoàn toàn đúng đắn "
-            "(verdicts_correct=True) và nghiệm duy nhất (uniqueness=UNIQUE)."
-        )
-        txt_sections.append(msg + "\n")
+        msg += " Không ghi nhận ca lỗi, timeout, AMBIGUOUS hay INCONSISTENT nào."
     else:
-        err_headers = ["Puzzle ID", "Kích thước", "Chế độ", "Lần chạy", "Status", "Uniqueness", "Thời gian", "Thông báo lỗi"]
-        err_rows = [[r["puzzle_id"], r["size"], r["model_reuse"], r["run"], r["status"], r["uniqueness"], r["runtime"], r["error"]]
+        msg += f" Có {failure_info['failure_count']} lượt không thành công, chi tiết ở bảng dưới."
+    txt_sections.append(msg + "\n")
+
+    if failure_info["failure_count"] > 0:
+        err_headers = ["Puzzle ID", "Kích thước", "Chế độ", "Lần chạy", "Status", "Uniqueness", "Outcome", "Thời gian", "Thông báo lỗi"]
+        err_rows = [[r["puzzle_id"], r["size"], r["model_reuse"], r["run"], r["status"], r["uniqueness"], r["outcome"], r["runtime"], r["error"]]
                     for r in failure_info["failure_rows"]]
         txt_sections.append("\nDanh sach chi tiet cac ca loi / timeout:")
         txt_sections.append(tabulate(err_rows, headers=err_headers, tablefmt="grid"))
@@ -421,11 +588,11 @@ def generate_report_tables(df: pd.DataFrame, out_dir: Path) -> dict[str, str]:
 
 # CÁC HÀM VẼ BIỂU ĐỒ (MATPLOTLIB)
 
-def plot_runtime_comparison(df: pd.DataFrame, out_path: Path, dpi: int = 300) -> None:
+def plot_runtime_comparison(df: pd.DataFrame, out_path: Path, dpi: int = 300) -> bool:
     """Biểu đồ thời gian chạy (runtime) theo kích thước, so sánh Model Reuse On vs Off"""
-    solved = df[df["status"] == "SOLVED"]
+    solved = _solved_only(df)
     if solved.empty:
-        return
+        return False
 
     sizes = sorted(solved["size_label"].unique())
     x = np.arange(len(sizes))
@@ -437,9 +604,9 @@ def plot_runtime_comparison(df: pd.DataFrame, out_path: Path, dpi: int = 300) ->
     for s in sizes:
         sub_on = solved[(solved["size_label"] == s) & (solved["model_reuse"] == "on")]["runtime"] * 1000.0
         sub_off = solved[(solved["size_label"] == s) & (solved["model_reuse"] == "off")]["runtime"] * 1000.0
-        time_on.append(sub_on.mean() if not sub_on.empty else 0.0)
+        time_on.append(_safe_mean(sub_on))
         std_on.append(sub_on.std() if len(sub_on) > 1 else 0.0)
-        time_off.append(sub_off.mean() if not sub_off.empty else 0.0)
+        time_off.append(_safe_mean(sub_off))
         std_off.append(sub_off.std() if len(sub_off) > 1 else 0.0)
 
     fig, ax = plt.subplots(figsize=(8, 5))
@@ -448,7 +615,9 @@ def plot_runtime_comparison(df: pd.DataFrame, out_path: Path, dpi: int = 300) ->
     rects2 = ax.bar(x + width / 2, time_off, width, yerr=std_off, label="Model Reuse: OFF",
                     color=COLORS["off"], capsize=5, edgecolor="black", linewidth=0.8)
 
-    max_runtime = max([t + s for t, s in zip(time_off, std_off)] + [t + s for t, s in zip(time_on, std_on)] or [1])
+    max_runtime = _safe_max(
+        [t + s for t, s in zip(time_off, std_off)] + [t + s for t, s in zip(time_on, std_on)]
+    )
     ax.set_ylim(0, max_runtime * 1.25)
 
     ax.set_title("Thời gian chạy trung bình theo kích thước câu đố (Runtime)", fontsize=13, fontweight="bold", pad=16)
@@ -476,13 +645,14 @@ def plot_runtime_comparison(df: pd.DataFrame, out_path: Path, dpi: int = 300) ->
     plt.tight_layout()
     fig.savefig(out_path, dpi=dpi)
     plt.close(fig)
+    return True
 
 
-def plot_sat_calls(df: pd.DataFrame, out_path: Path, dpi: int = 300) -> None:
+def plot_sat_calls(df: pd.DataFrame, out_path: Path, dpi: int = 300) -> bool:
     """Biểu đồ số lượt gọi SAT Solver và số lượng truy vấn được cắt giảm nhờ Model Reuse"""
-    solved = df[df["status"] == "SOLVED"]
+    solved = _solved_only(df)
     if solved.empty:
-        return
+        return False
 
     sizes = sorted(solved["size_label"].unique())
     x = np.arange(len(sizes))
@@ -492,9 +662,9 @@ def plot_sat_calls(df: pd.DataFrame, out_path: Path, dpi: int = 300) -> None:
     for s in sizes:
         sub_on = solved[(solved["size_label"] == s) & (solved["model_reuse"] == "on")]
         sub_off = solved[(solved["size_label"] == s) & (solved["model_reuse"] == "off")]
-        calls_on.append(sub_on["sat_calls"].mean() if not sub_on.empty else 0.0)
-        skipped_on.append(sub_on["skipped_queries"].mean() if not sub_on.empty else 0.0)
-        calls_off.append(sub_off["sat_calls"].mean() if not sub_off.empty else 0.0)
+        calls_on.append(_safe_mean(sub_on["sat_calls"]))
+        skipped_on.append(_safe_mean(sub_on["skipped_queries"]))
+        calls_off.append(_safe_mean(sub_off["sat_calls"]))
 
     fig, ax = plt.subplots(figsize=(8.5, 5))
     rects1 = ax.bar(x - width / 2, calls_on, width, label="SAT Calls thực thi (Reuse ON)",
@@ -505,7 +675,7 @@ def plot_sat_calls(df: pd.DataFrame, out_path: Path, dpi: int = 300) -> None:
     rects2 = ax.bar(x + width / 2, calls_off, width, label="SAT Calls thực thi (Reuse OFF)",
                     color=COLORS["off"], edgecolor="black", linewidth=0.8)
 
-    max_calls = max([calls_on[i] + skipped_on[i] for i in range(len(sizes))] + calls_off or [1])
+    max_calls = _safe_max([calls_on[i] + skipped_on[i] for i in range(len(sizes))] + calls_off)
     ax.set_ylim(0, max_calls * 1.25)
 
     ax.set_title("Số lượng truy vấn SAT và hiệu quả lược bỏ truy vấn (Skipped Queries)",
@@ -532,13 +702,14 @@ def plot_sat_calls(df: pd.DataFrame, out_path: Path, dpi: int = 300) -> None:
     plt.tight_layout()
     fig.savefig(out_path, dpi=dpi)
     plt.close(fig)
+    return True
 
 
-def plot_solver_operations(df: pd.DataFrame, out_path: Path, dpi: int = 300) -> None:
+def plot_solver_operations(df: pd.DataFrame, out_path: Path, dpi: int = 300) -> bool:
     """Biểu đồ 3 panel so sánh Decisions, Propagations, Backtracks của DPLL solver"""
-    solved = df[df["status"] == "SOLVED"]
+    solved = _solved_only(df)
     if solved.empty:
-        return
+        return False
 
     sizes = sorted(solved["size_label"].unique())
     x = np.arange(len(sizes))
@@ -554,13 +725,13 @@ def plot_solver_operations(df: pd.DataFrame, out_path: Path, dpi: int = 300) -> 
 
     for idx, (col, title, color) in enumerate(metrics):
         ax = axes[idx]
-        val_on = [solved[(solved["size_label"] == s) & (solved["model_reuse"] == "on")][col].mean() for s in sizes]
-        val_off = [solved[(solved["size_label"] == s) & (solved["model_reuse"] == "off")][col].mean() for s in sizes]
+        val_on = [_safe_mean(solved[(solved["size_label"] == s) & (solved["model_reuse"] == "on")][col]) for s in sizes]
+        val_off = [_safe_mean(solved[(solved["size_label"] == s) & (solved["model_reuse"] == "off")][col]) for s in sizes]
 
         ax.bar(x - width / 2, val_on, width, label="Reuse ON", color=COLORS["on"], edgecolor="black", linewidth=0.7)
         ax.bar(x + width / 2, val_off, width, label="Reuse OFF", color=COLORS["off"], edgecolor="black", linewidth=0.7)
 
-        max_v = max(val_on + val_off or [1])
+        max_v = _safe_max(val_on + val_off)
         ax.set_ylim(0, max_v * 1.25 if max_v > 0 else 1)
 
         ax.set_title(title, fontsize=11, fontweight="bold", pad=12)
@@ -575,24 +746,25 @@ def plot_solver_operations(df: pd.DataFrame, out_path: Path, dpi: int = 300) -> 
     plt.tight_layout()
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
+    return True
 
 
-def plot_encoding_complexity(df: pd.DataFrame, out_path: Path, dpi: int = 300) -> None:
+def plot_encoding_complexity(df: pd.DataFrame, out_path: Path, dpi: int = 300) -> bool:
     """Biểu đồ số biến chính, biến phụ và số lượng mệnh đề CNF (KB0, KB_final, Full)"""
-    solved = df[df["status"] == "SOLVED"]
+    solved = _solved_only(df)
     if solved.empty:
-        return
+        return False
 
     sizes = sorted(solved["size_label"].unique())
     x = np.arange(len(sizes))
     width = 0.25
 
-    main_vars = [solved[solved["size_label"] == s]["full_main_vars"].mean() for s in sizes]
-    aux_vars = [solved[solved["size_label"] == s]["full_aux_vars"].mean() for s in sizes]
+    main_vars = [_safe_mean(solved[solved["size_label"] == s]["full_main_vars"]) for s in sizes]
+    aux_vars = [_safe_mean(solved[solved["size_label"] == s]["full_aux_vars"]) for s in sizes]
 
-    kb0_cl = [solved[solved["size_label"] == s]["kb0_clauses"].mean() for s in sizes]
-    final_cl = [solved[solved["size_label"] == s]["kb_final_clauses"].mean() for s in sizes]
-    full_cl = [solved[solved["size_label"] == s]["full_clauses"].mean() for s in sizes]
+    kb0_cl = [_safe_mean(solved[solved["size_label"] == s]["kb0_clauses"]) for s in sizes]
+    final_cl = [_safe_mean(solved[solved["size_label"] == s]["kb_final_clauses"]) for s in sizes]
+    full_cl = [_safe_mean(solved[solved["size_label"] == s]["full_clauses"]) for s in sizes]
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5))
 
@@ -623,13 +795,14 @@ def plot_encoding_complexity(df: pd.DataFrame, out_path: Path, dpi: int = 300) -
     plt.tight_layout()
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
+    return True
 
 
-def plot_speedup_and_savings(df: pd.DataFrame, out_path: Path, dpi: int = 300) -> None:
+def plot_speedup_and_savings(df: pd.DataFrame, out_path: Path, dpi: int = 300) -> bool:
     """Biểu đồ tỉ lệ tiết kiệm SAT calls (%) và hệ số tăng tốc thời gian (Speedup factor)"""
     comp_df = compute_model_reuse_comparison(df)
     if comp_df.empty:
-        return
+        return False
 
     sizes = comp_df["_raw_size"].tolist()
     savings = comp_df["_raw_sat_saved_pct"].tolist()
@@ -645,7 +818,7 @@ def plot_speedup_and_savings(df: pd.DataFrame, out_path: Path, dpi: int = 300) -
     ax1.set_ylabel("Phần trăm tiết kiệm (%)", fontsize=10, fontweight="bold")
     ax1.set_xticks(x)
     ax1.set_xticklabels(sizes)
-    ax1.set_ylim(0, max(savings + [10]) * 1.15)
+    ax1.set_ylim(0, _safe_max(savings, 10.0) * 1.15)
     ax1.grid(axis="y", linestyle="--", alpha=0.5)
     for bar in bars1:
         h = bar.get_height()
@@ -661,7 +834,7 @@ def plot_speedup_and_savings(df: pd.DataFrame, out_path: Path, dpi: int = 300) -
     ax2.set_ylabel("Tỉ số tăng tốc (Toff / Ton)", fontsize=10, fontweight="bold")
     ax2.set_xticks(x)
     ax2.set_xticklabels(sizes)
-    ax2.set_ylim(0, max(speedups + [1.5]) * 1.2)
+    ax2.set_ylim(0, _safe_max(speedups, 1.5) * 1.2)
     ax2.grid(axis="y", linestyle="--", alpha=0.5)
     ax2.legend(frameon=True)
     for bar in bars2:
@@ -673,61 +846,62 @@ def plot_speedup_and_savings(df: pd.DataFrame, out_path: Path, dpi: int = 300) -
     plt.tight_layout()
     fig.savefig(out_path, dpi=dpi)
     plt.close(fig)
+    return True
 
 
-def plot_status_distribution(df: pd.DataFrame, out_path: Path, dpi: int = 300) -> None:
-    """Biểu đồ phân bố trạng thái chạy (SOLVED, TIMEOUT, ERROR) theo kích thước"""
+def plot_status_distribution(df: pd.DataFrame, out_path: Path, dpi: int = 300) -> bool:
+    """Biểu đồ phân bố kết cục loại trừ lẫn nhau (outcome) theo kích thước"""
+    if df.empty:
+        return False
+
+    outcome = classify_outcomes(df)
     sizes = sorted(df["size_label"].unique())
     x = np.arange(len(sizes))
     width = 0.45
 
-    solved_counts = []
-    timeout_counts = []
-    error_counts = []
+    counts_by_outcome = {
+        name: [int((outcome.loc[df["size_label"] == s] == name).sum()) for s in sizes]
+        for name in OUTCOME_ORDER
+    }
 
-    for s in sizes:
-        sub = df[df["size_label"] == s]
-        n_solved = (sub["status"] == "SOLVED").sum()
-        n_timeout = ((sub["status"] == "TIMEOUT") | (sub.get("uniqueness", pd.Series()) == "TIMEOUT")).sum()
-        n_error = ((sub["status"].isin(["ERROR", "LOAD_ERROR"])) | (sub.get("error", pd.Series()).fillna("") != "")).sum()
-        solved_counts.append(int(n_solved))
-        timeout_counts.append(int(n_timeout))
-        error_counts.append(int(n_error))
-
-    fig, ax = plt.subplots(figsize=(7.5, 4.8))
-    p1 = ax.bar(x, solved_counts, width, label="SOLVED (Thành công)", color="#2ca02c", edgecolor="black")
-    p2 = ax.bar(x, timeout_counts, width, bottom=solved_counts, label="TIMEOUT (Quá giờ)", color="#ff7f0e", edgecolor="black")
-    bottom_err = np.array(solved_counts) + np.array(timeout_counts)
-    p3 = ax.bar(x, error_counts, width, bottom=bottom_err, label="ERROR (Lỗi)", color="#d62728", edgecolor="black")
+    fig, ax = plt.subplots(figsize=(9, 5))
+    bottom = np.zeros(len(sizes))
+    for name in OUTCOME_ORDER:
+        values = np.array(counts_by_outcome[name], dtype=float)
+        ax.bar(x, values, width, bottom=bottom, label=name,
+               color=OUTCOME_COLORS[name], edgecolor="black")
+        bottom += values
 
     # Mở rộng giới hạn trục Y (+25%) để nhãn số liệu không bị dính vào tiêu đề
-    max_total = max([s + t + e for s, t, e in zip(solved_counts, timeout_counts, error_counts)] or [1])
+    max_total = _safe_max(bottom.tolist())
     ax.set_ylim(0, max_total * 1.25)
 
-    ax.set_title("Phân bố trạng thái thực thi thực nghiệm theo kích thước", fontsize=12, fontweight="bold", pad=16)
+    ax.set_title("Phân bố kết cục thực thi thực nghiệm theo kích thước", fontsize=12, fontweight="bold", pad=16)
     ax.set_xlabel("Kích thước lưới", fontsize=10, fontweight="bold")
     ax.set_ylabel("Số lượt chạy", fontsize=10, fontweight="bold")
     ax.set_xticks(x)
     ax.set_xticklabels(sizes)
     ax.grid(axis="y", linestyle="--", alpha=0.5)
-    ax.legend(frameon=True, loc="upper right")
+    ax.legend(frameon=True, loc="upper right", fontsize=8.5)
 
     for i in range(len(sizes)):
-        total = solved_counts[i] + timeout_counts[i] + error_counts[i]
-        rate = (solved_counts[i] / total * 100) if total > 0 else 0
-        ax.annotate(f"{solved_counts[i]}/{total} ({rate:.0f}%)",
+        total = int(bottom[i])
+        solved_n = counts_by_outcome[OUTCOME_SOLVED][i]
+        rate = (solved_n / total * 100) if total > 0 else 0
+        ax.annotate(f"{solved_n}/{total} ({rate:.0f}%)",
                     xy=(x[i], total), xytext=(0, 5), textcoords="offset points",
                     ha="center", va="bottom", fontsize=9, fontweight="bold")
 
     plt.tight_layout()
     fig.savefig(out_path, dpi=dpi)
     plt.close(fig)
+    return True
 
 
-def plot_step_dynamics(steps_df: pd.DataFrame | None, out_path: Path, dpi: int = 300) -> None:
+def plot_step_dynamics(steps_df: pd.DataFrame | None, out_path: Path, dpi: int = 300) -> bool:
     """Biểu đồ động lực học từng bước suy diễn (Deduction Step Dynamics) nếu có dữ liệu steps"""
     if steps_df is None or steps_df.empty:
-        return
+        return False
 
     # Lọc lấy một vài puzzle tiêu biểu của 3x3, 4x4, 5x5 (chế độ on, run 1)
     sub = steps_df[(steps_df["model_reuse"] == "on") & (steps_df["run"] == 1)]
@@ -741,7 +915,7 @@ def plot_step_dynamics(steps_df: pd.DataFrame | None, out_path: Path, dpi: int =
             sample_puzzles.append(p_ids[0])
 
     if not sample_puzzles:
-        return
+        return False
 
     fig, axes = plt.subplots(1, len(sample_puzzles), figsize=(5.5 * len(sample_puzzles), 4.5), sharey=False)
     if len(sample_puzzles) == 1:
@@ -772,13 +946,14 @@ def plot_step_dynamics(steps_df: pd.DataFrame | None, out_path: Path, dpi: int =
     plt.tight_layout()
     fig.savefig(out_path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
+    return True
 
 
-def plot_overview_dashboard(df: pd.DataFrame, out_path: Path, dpi: int = 300) -> None:
+def plot_overview_dashboard(df: pd.DataFrame, out_path: Path, dpi: int = 300) -> bool:
     """Dashboard tổng hợp 4 đồ thị chính trong một bức ảnh chuẩn báo cáo"""
-    solved = df[df["status"] == "SOLVED"]
+    solved = _solved_only(df)
     if solved.empty:
-        return
+        return False
 
     sizes = sorted(solved["size_label"].unique())
     x = np.arange(len(sizes))
@@ -788,11 +963,11 @@ def plot_overview_dashboard(df: pd.DataFrame, out_path: Path, dpi: int = 300) ->
 
     # 1. Top-Left: Runtime
     ax1 = axes[0, 0]
-    t_on = [solved[(solved["size_label"] == s) & (solved["model_reuse"] == "on")]["runtime"].mean() * 1000 for s in sizes]
-    t_off = [solved[(solved["size_label"] == s) & (solved["model_reuse"] == "off")]["runtime"].mean() * 1000 for s in sizes]
+    t_on = [_safe_mean(solved[(solved["size_label"] == s) & (solved["model_reuse"] == "on")]["runtime"]) * 1000 for s in sizes]
+    t_off = [_safe_mean(solved[(solved["size_label"] == s) & (solved["model_reuse"] == "off")]["runtime"]) * 1000 for s in sizes]
     ax1.bar(x - width / 2, t_on, width, label="Reuse ON", color=COLORS["on"], edgecolor="black")
     ax1.bar(x + width / 2, t_off, width, label="Reuse OFF", color=COLORS["off"], edgecolor="black")
-    max_t = max(t_on + t_off or [1])
+    max_t = _safe_max(t_on + t_off)
     ax1.set_ylim(0, max_t * 1.25)
     ax1.set_title("(A) Thời gian chạy trung bình (ms)", fontsize=11, fontweight="bold", pad=10)
     ax1.set_xticks(x)
@@ -802,11 +977,11 @@ def plot_overview_dashboard(df: pd.DataFrame, out_path: Path, dpi: int = 300) ->
 
     # 2. Top-Right: SAT Calls
     ax2 = axes[0, 1]
-    c_on = [solved[(solved["size_label"] == s) & (solved["model_reuse"] == "on")]["sat_calls"].mean() for s in sizes]
-    c_off = [solved[(solved["size_label"] == s) & (solved["model_reuse"] == "off")]["sat_calls"].mean() for s in sizes]
+    c_on = [_safe_mean(solved[(solved["size_label"] == s) & (solved["model_reuse"] == "on")]["sat_calls"]) for s in sizes]
+    c_off = [_safe_mean(solved[(solved["size_label"] == s) & (solved["model_reuse"] == "off")]["sat_calls"]) for s in sizes]
     ax2.bar(x - width / 2, c_on, width, label="Reuse ON", color=COLORS["on"], edgecolor="black")
     ax2.bar(x + width / 2, c_off, width, label="Reuse OFF", color=COLORS["off"], edgecolor="black")
-    max_c = max(c_on + c_off or [1])
+    max_c = _safe_max(c_on + c_off)
     ax2.set_ylim(0, max_c * 1.25)
     ax2.set_title("(B) Tổng số truy vấn SAT", fontsize=11, fontweight="bold", pad=10)
     ax2.set_xticks(x)
@@ -814,28 +989,36 @@ def plot_overview_dashboard(df: pd.DataFrame, out_path: Path, dpi: int = 300) ->
     ax2.grid(axis="y", linestyle="--", alpha=0.5)
     ax2.legend(frameon=True, fontsize=9)
 
-    # 3. Bottom-Left: DPLL Solver Operations
+    # 3. Bottom-Left: DPLL Solver Operations, tách riêng ON/OFF như các panel khác
     ax3 = axes[1, 0]
-    dec = [solved[solved["size_label"] == s]["decisions"].mean() for s in sizes]
-    prop = [solved[solved["size_label"] == s]["propagations"].mean() for s in sizes]
-    w = 0.28
-    ax3.bar(x - w / 2, dec, w, label="Decisions", color=COLORS["purple"], edgecolor="black")
-    ax3.bar(x + w / 2, prop, w, label="Propagations", color=COLORS["cyan"], edgecolor="black")
-    max_op = max(dec + prop or [1])
+    dec_on = [_safe_mean(solved[(solved["size_label"] == s) & (solved["model_reuse"] == "on")]["decisions"]) for s in sizes]
+    dec_off = [_safe_mean(solved[(solved["size_label"] == s) & (solved["model_reuse"] == "off")]["decisions"]) for s in sizes]
+    prop_on = [_safe_mean(solved[(solved["size_label"] == s) & (solved["model_reuse"] == "on")]["propagations"]) for s in sizes]
+    prop_off = [_safe_mean(solved[(solved["size_label"] == s) & (solved["model_reuse"] == "off")]["propagations"]) for s in sizes]
+    w = 0.2
+    ax3.bar(x - 1.5 * w, dec_on, w, label="Decisions ON", color=COLORS["purple"], edgecolor="black")
+    ax3.bar(x - 0.5 * w, dec_off, w, label="Decisions OFF", color=COLORS["purple"], alpha=0.55, hatch="//", edgecolor="black")
+    ax3.bar(x + 0.5 * w, prop_on, w, label="Propagations ON", color=COLORS["cyan"], edgecolor="black")
+    ax3.bar(x + 1.5 * w, prop_off, w, label="Propagations OFF", color=COLORS["cyan"], alpha=0.55, hatch="//", edgecolor="black")
+    max_op = _safe_max(dec_on + dec_off + prop_on + prop_off)
     ax3.set_ylim(0, max_op * 1.25)
-    ax3.set_title("(C) Thao tác Solver (Decisions & Propagations)", fontsize=11, fontweight="bold", pad=10)
+    ax3.set_title("(C) Thao tác Solver theo chế độ (Decisions & Propagations)", fontsize=11, fontweight="bold", pad=10)
     ax3.set_xticks(x)
     ax3.set_xticklabels(sizes)
     ax3.grid(axis="y", linestyle="--", alpha=0.5)
-    ax3.legend(frameon=True, fontsize=9)
+    ax3.legend(frameon=True, fontsize=8)
 
     # 4. Bottom-Right: Encoding Size (Variables & Clauses)
     ax4 = axes[1, 1]
-    cl = [solved[solved["size_label"] == s]["full_clauses"].mean() for s in sizes]
-    v = [solved[solved["size_label"] == s]["full_main_vars"].mean() + solved[solved["size_label"] == s]["full_aux_vars"].mean() for s in sizes]
+    cl = [_safe_mean(solved[solved["size_label"] == s]["full_clauses"]) for s in sizes]
+    v = [
+        _safe_mean(solved[solved["size_label"] == s]["full_main_vars"])
+        + _safe_mean(solved[solved["size_label"] == s]["full_aux_vars"])
+        for s in sizes
+    ]
     ax4.bar(x - w / 2, v, w, label="Tổng số biến (Vars)", color="#2ca02c", edgecolor="black")
     ax4.bar(x + w / 2, cl, w, label="Mệnh đề Full (Clauses)", color="#d62728", edgecolor="black")
-    max_enc = max(cl + v or [1])
+    max_enc = _safe_max(cl + v)
     ax4.set_ylim(0, max_enc * 1.25)
     ax4.set_title("(D) Quy mô mã hoá CNF", fontsize=11, fontweight="bold", pad=10)
     ax4.set_xticks(x)
@@ -847,6 +1030,7 @@ def plot_overview_dashboard(df: pd.DataFrame, out_path: Path, dpi: int = 300) ->
     plt.tight_layout()
     fig.savefig(out_path, dpi=dpi)
     plt.close(fig)
+    return True
 
 
 
@@ -860,10 +1044,10 @@ def generate_all_plots_and_tables(
     dpi: int = 300,
     generate_plots: bool = True,
     quiet: bool = False,
-) -> list[Path]:
+) -> tuple[list[Path], list[str]]:
     """
     Quy trình đầy đủ: đọc dữ liệu, tạo bảng báo cáo và vẽ toàn bộ biểu đồ.
-    Trả về danh sách các đường dẫn file đã tạo.
+    Trả về (danh sách file thật sự đã tạo, danh sách tên biểu đồ bị lỗi).
     """
     df = load_summary_data(summary_path)
     steps_df = load_steps_data(steps_path) if steps_path.is_file() else None
@@ -881,6 +1065,7 @@ def generate_all_plots_and_tables(
         print("\n" + report_res["text"] + "\n")
 
     # 2. Sinh các biểu đồ trực quan
+    plot_failures: list[str] = []
     if generate_plots:
         plots = [
             ("runtime_by_size", lambda p: plot_runtime_comparison(df, p, dpi)),
@@ -898,14 +1083,23 @@ def generate_all_plots_and_tables(
         for name, plot_fn in plots:
             fig_path = out_dir / f"{name}.{img_format}"
             try:
-                plot_fn(fig_path)
+                created = plot_fn(fig_path)
+            except Exception as exc:
+                plot_failures.append(name)
+                print(f"Lỗi khi vẽ biểu đồ {name}: {exc}", file=sys.stderr)
+                continue
+
+            if created and fig_path.is_file():
                 generated_files.append(fig_path)
                 if not quiet:
                     print(f"Đã tạo biểu đồ: {fig_path.name}")
-            except Exception as exc:
-                print(f"Lỗi khi vẽ biểu đồ {name}: {exc}", file=sys.stderr)
+            elif created:
+                plot_failures.append(name)
+                print(f"Lỗi khi vẽ biểu đồ {name}: hàm báo thành công nhưng không có file {fig_path}", file=sys.stderr)
+            elif not quiet:
+                print(f"Bỏ qua biểu đồ {name}: không có dữ liệu phù hợp", file=sys.stderr)
 
-    return generated_files
+    return generated_files, plot_failures
 
 
 
@@ -967,7 +1161,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     try:
-        written = generate_all_plots_and_tables(
+        written, plot_failures = generate_all_plots_and_tables(
             summary_path=args.summary_csv,
             steps_path=args.steps_csv,
             out_dir=args.out_dir,
@@ -976,6 +1170,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             generate_plots=not args.no_plots,
             quiet=args.quiet,
         )
+        if plot_failures:
+            print(
+                f"\nLỗi: {len(plot_failures)} biểu đồ không được tạo: {', '.join(plot_failures)}",
+                file=sys.stderr,
+            )
+            print(f"Đã tạo {len(written)} sản phẩm tại: {args.out_dir}", file=sys.stderr)
+            return 3
         print(f"\nHoàn tất task T22! Đã tạo {len(written)} sản phẩm tại: {args.out_dir}")
         return 0
     except Exception as exc:
