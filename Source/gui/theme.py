@@ -23,56 +23,66 @@ def _hex(value: str, alpha: int = 255) -> tuple[int, int, int, int]:
     return int(v[0:2], 16), int(v[2:4], 16), int(v[4:6], 16), alpha
 
 
-class Color:
-    # nền và bề mặt (sáng dần theo độ nổi)
-    bg = _hex("151310")              # ink black
-    surface_1 = _hex("211C18")       # dark walnut: panel, toolbar
-    surface_2 = _hex("2B251F")       # dòng clue, nút
-    surface_3 = _hex("38302A")       # hover trên surface
-    border = _hex("4A3E2D")          # đường chia, viền panel (brass tối hơn để không quá nặng)
 
-    # chữ trên nền tối
-    text = _hex("F5EEDC")            # ivory
-    text_dim = _hex("A8957D")        # faded sepia, sáng hơn một chút so với 8D7964 để đủ tương phản
-    text_disabled = _hex("6E6253")
+class Color:
+    # nền và bề mặt — light vintage paper
+    bg = _hex("E9E0D0")              # warm archival paper
+    surface_1 = _hex("F5EFE3")       # ivory: sidebar, toolbar, panels
+    surface_2 = _hex("EDE4D4")       # parchment: clue rows, buttons
+    surface_3 = _hex("E2D5C0")       # darker parchment: hover
+    border = _hex("C8B99F")          # aged paper border
+
+    # chữ trên nền sáng
+    text = _hex("342B22")            # dark ink
+    text_dim = _hex("766653")        # faded sepia
+    text_disabled = _hex("A99C89")
     scrollbar = _hex("A8957D", 140)
 
-    # chữ trên thẻ úp (giấy da)
-    card_text = _hex("34271F")       # dark brown
-    card_text_dim = _hex("4A3C2E")
+    # chữ trên thẻ
+    card_text = _hex("34271F")       # dark brown ink
+    card_text_dim = _hex("715D47")  # faded brown
 
     # thẻ
     card_back = _hex("C5AD88")       # aged parchment
     card_back_hover = _hex("D3BD99")
-    card_border = _hex("6D573A")     # aged brass
+    card_border = _hex("947A57")     # antique brass
+
     criminal = _hex("963F3B")        # muted burgundy
     innocent = _hex("39775A")        # muted forest green
-    badge_bg = _hex("151310")
-    card_face = _hex("DCCBA8")          # giấy da sáng hơn mặt úp, dùng cho thẻ đã lật
-    card_face_criminal = _hex("C49B84") # card_face pha 34% criminal: giấy da ửng đỏ
-    card_face_innocent = _hex("AEB392") # card_face pha 28% innocent: giấy da ngả xanh rêu
-    stamp_criminal = _hex("7F2A27")     # mực con dấu, đậm hơn criminal để đủ tương phản trên giấy
-    stamp_innocent = _hex("245A41")
+
+    badge_bg = _hex("342B22")        # dark ink badge
+
+    # thẻ đã lật — giấy sáng, verdict tint nhẹ
+    card_face = _hex("F2E8D5")       # warm ivory paper
+    card_face_criminal = _hex("E8D0C5") # parchment with subtle red tint
+    card_face_innocent = _hex("D8E2D1") # parchment with subtle green tint
+
+    stamp_criminal = _hex("812F2B")  # dark burgundy ink
+    stamp_innocent = _hex("285C43")  # dark forest ink
 
     # tương tác
-    accent = _hex("C49A58")          # antique gold, chỉ dành cho chrome, KHÔNG dùng gần vùng highlight
-    focus = _hex("F5EEDC")
-    focus_edge = _hex("151310")      # viền tối ngoài vòng focus, để vòng thấy được trên giấy da
-    hint = _hex("FF8C42")
-    hover_overlay = (255, 255, 255, 22)
-    scrim = _hex("0B0A08", 215)
+    accent = _hex("A77B35")          # antique gold
+    focus = _hex("A77B35")           # gold selection ring
+    focus_edge = _hex("F5EFE3")      # ivory outer separation
+
+    hint = _hex("B65F25")             # burnt amber
+
+    hover_overlay = (52, 43, 34, 16)
+    scrim = _hex("342B22", 110)
 
     # vai trò khi highlight clue
-    role_subject = _hex("D5A64A")    # antique gold
-    role_counted = _hex("54B8B8")    # dusty teal
-    role_condition = _hex("BD78C9")  # muted orchid
-    role_tint = 50
+    # darker colors for visibility on light parchment
+    role_subject = _hex("A57923")    # antique gold
+    role_counted = _hex("287F83")    # deep dusty teal
+    role_condition = _hex("92549E")  # muted plum
+
+    role_tint = 35
 
     # phản hồi
-    fb_info = _hex("6FA3B8")
-    fb_warn = _hex("D9A441")
-    fb_error = _hex("D9625B")
-    fb_ok = _hex("6FB58A")
+    fb_info = _hex("39758D")         # archival blue
+    fb_warn = _hex("A47722")         # amber
+    fb_error = _hex("AD4640")        # muted red
+    fb_ok = _hex("397A58")           # forest green
 
 
 class Space:
