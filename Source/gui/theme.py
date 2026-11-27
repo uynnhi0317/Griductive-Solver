@@ -49,6 +49,8 @@ class Color:
     innocent = _hex("39775A")        # muted forest green
     badge_bg = _hex("151310")
     card_face = _hex("DCCBA8")          # giấy da sáng hơn mặt úp, dùng cho thẻ đã lật
+    card_face_criminal = _hex("C49B84") # card_face pha 34% criminal: giấy da ửng đỏ
+    card_face_innocent = _hex("AEB392") # card_face pha 28% innocent: giấy da ngả xanh rêu
     stamp_criminal = _hex("7F2A27")     # mực con dấu, đậm hơn criminal để đủ tương phản trên giấy
     stamp_innocent = _hex("245A41")
 
@@ -112,6 +114,10 @@ STATUS_COLOR = {
     Status.INNOCENT: Color.innocent,
 }
 
+FACE_COLOR = {          # nền thẻ đã lật, chữ card_text trên nền này vẫn tương phản >= 5.5:1
+    Status.CRIMINAL: Color.card_face_criminal,
+    Status.INNOCENT: Color.card_face_innocent,
+}
 STAMP_COLOR = {
     Status.CRIMINAL: Color.stamp_criminal,
     Status.INNOCENT: Color.stamp_innocent,
@@ -220,8 +226,10 @@ def clear_caches() -> None:
     Xóa cache font và chữ đã render. Font bị hỏng sau pygame.quit(), nên phải gọi hàm này
     trước pygame.quit() nếu sau đó còn pygame.init() lại (ví dụ giữa các test).
     """
+    from .avatar import clear_cache as clear_avatar_cache   # import trễ: avatar không phụ thuộc theme
     render_text.cache_clear()
     get_font.cache_clear()
+    clear_avatar_cache()                                    # Surface avatar cũng hỏng sau pygame.quit()
     
 # ---------------------------------------------------------------- drawing
 SCROLLBAR_W = 6
