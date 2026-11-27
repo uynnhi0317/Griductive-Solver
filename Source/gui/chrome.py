@@ -1,10 +1,7 @@
 """Thanh trên (tên màn, chuyển màn, tiến độ) và thanh trạng thái (thông báo cho người chơi)"""
 
-from typing import Callable
-
 import pygame
 
-from game.character import Status
 from .component import Component
 from .theme import Color, Face, LEVEL_COLOR, Level, Size, Space, ellipsize, get_font, render_text
 from .widgets import Button, Slider, place_buttons
@@ -102,18 +99,16 @@ class StatusBar(Component):
 _HINT_LABELS = ("Hint", "Reveal", "Clear") 
 
 class ActionBar(Component):
-    """Hàng nút dưới bàn cờ: phán quyết (trái), Hint / Auto Solve / Restart / Load (phải)"""
+    """
+    Hàng nút dưới bàn cờ: Hint / Auto Solve / Restart / Load (phải).
+    Phán quyết Criminal / Innocent nằm trong VerdictPopup hiện cạnh thẻ được chọn.
+    """
 
-    def __init__(self, on_verdict: Callable[[Status], None], on_verdict_blocked: Callable[[], None],
-                 on_hint, on_auto_solve, on_restart, on_load):
+    def __init__(self, on_hint, on_auto_solve, on_restart, on_load):
         self.rect = pygame.Rect(0, 0, 0, 0)
-        self.criminal = Button("Criminal", lambda: on_verdict(Status.CRIMINAL), Status.CRIMINAL,
-                               on_disabled_click=on_verdict_blocked)
-        self.innocent = Button("Innocent", lambda: on_verdict(Status.INNOCENT), Status.INNOCENT,
-                               on_disabled_click=on_verdict_blocked)
         self.hint = Button("Hint", on_hint)
         self.auto = Button("Auto Solve", on_auto_solve, width_hint="Auto Solve")
-        self._left = [self.criminal, self.innocent]
+        self._left: list[Button] = []
         self._right = [self.hint, self.auto, Button("Restart", on_restart), Button("Load", on_load)]
 
     def set_hint_stage(self, stage: int) -> None:
@@ -121,9 +116,6 @@ class ActionBar(Component):
 
     def set_auto_running(self, running: bool) -> None:
         self.auto.label = "Stop" if running else "Auto Solve"
-
-    def set_verdict_enabled(self, enabled: bool) -> None:
-        self.criminal.enabled = self.innocent.enabled = enabled
 
     def fit(self, rect: pygame.Rect) -> None:
         self.rect = pygame.Rect(rect)

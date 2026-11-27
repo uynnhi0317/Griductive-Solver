@@ -9,7 +9,7 @@ from .avatar import get_avatar
 from .highlight import Role
 from .theme import (
     Color, Face, Radius, Space, Size, Stroke, FACE_COLOR, STATUS_COLOR, STAMP_COLOR, ROLE_COLOR,
-    draw_rect_alpha, draw_status_icon, fit_line, fit_wrapped, get_font,
+    draw_rect_alpha, fit_line, fit_wrapped, get_font,
 )
 
 COMPACT_PX = 110        # thẻ nhỏ hơn ngưỡng này chỉ hiện huy hiệu + tên
@@ -24,6 +24,8 @@ HINT_HZ = 1.2           # nhịp đập của vòng gợi ý
 HINT_OUTSET = ROLE_OUTSET + Stroke.thick   # nằm ngoài vòng role, vẫn < Space.sm nên không đè thẻ kề
 STAMP_ANGLE = 6         # độ, nghiêng ngược chiều kim đồng hồ
 STAMP_ALPHA = 220
+ROLE_W = 5              # viền vai trò (subject / counted / condition): khít mép thẻ, dày để nổi bật
+DIM_ALPHA = 165         # thẻ không liên quan tới clue đang chọn: phủ màu nền để mờ đi
 AVATAR_W_FRAC = 0.55    # avatar ở giữa thẻ: tối đa 55% chiều rộng
 AVATAR_H_FRAC = 0.46    # và 46% chiều cao, chừa chỗ cho tên + nghề bên dưới
 AVATAR_BOTTOM = 0.56    # đáy avatar nằm ở 56% chiều cao thẻ
@@ -49,8 +51,9 @@ class CharacterCard:
 
     Quy tắc trạng thái (không bao giờ làm thẻ tối đi):
     + hover:    nền sáng lên (thẻ úp đổi sang card_back_hover, thẻ ngửa phủ lớp trắng mờ)
-    + selected: vòng focus 3px + phóng to 1.03
-    + role:     phủ màu mờ + viền màu, vẽ SAU vòng focus nên luôn nằm trên cùng
+    + selected: vòng focus 3px + phóng to 1.03 (thẻ có vai trò thì viền vai trò thay vòng focus)
+    + role:     viền màu ROLE_W khít mép thẻ (thẻ úp phủ thêm màu nhạt)
+    + dimmed:   đang chọn một clue mà thẻ này không liên quan -> phủ màu nền cho mờ đi
     """
     RADIUS = Radius.card
 
@@ -63,6 +66,7 @@ class CharacterCard:
         self._sel_target = False
         self.role: Role | None = None                        # vai trò highlight của clue đang chọn
         self.hint = False                                    # đang là mục tiêu của Hint
+        self.dimmed = False                                  # không liên quan tới clue đang chọn
         self._hint_time = 0.0
         self._set_model(model)
 
@@ -196,8 +200,7 @@ class CharacterCard:
         pygame.draw.rect(face, STATUS_COLOR[m.status], face.get_rect(), width=Stroke.thick,
                          border_radius=self.RADIUS)
 
-        badge_r = max(8, h // 14)
-        draw_status_icon(face, m.status, w - inset - badge_r, inset + badge_r, badge_r)
+        badge_r = max(8, h // 14)                     # không vẽ huy hiệu nữa, chỉ dùng làm cỡ avatar tối thiểu
 
         if min(w, h) < AVATAR_MIN_PX:                 # quá nhỏ: chỉ đủ chỗ cho tên
             font, text = fit_line(m.character.name, h // 4, w - 2 * Space.sm, bold=True, face=Face.DISPLAY)
@@ -231,14 +234,14 @@ class CharacterCard:
     def _blit_header(self, face: pygame.Surface, w: int, h: int, badge_r: int,
                      inset: int = Space.md) -> int:
         """
-        Header giống bản gốc: [avatar | tên đậm / nghề bên dưới] gộp thành MỘT nhóm canh giữa thẻ;
-        nhóm chỉ lùi sang trái khi sắp đè huy hiệu góc phải. Thẻ nhỏ chỉ có [avatar | tên] một dòng.
+        Header giống bản gốc: [avatar | tên đậm / nghề bên dưới] gộp thành MỘT nhóm canh giữa thẻ.
+        Thẻ nhỏ chỉ có [avatar | tên] một dòng.
         Không vừa thì lần lượt: thu nhỏ chữ (tới cỡ caption) -> bỏ nghề -> bỏ avatar, cắt '...'.
         Trả về y của đáy header để clue bắt đầu ngay bên dưới.
         """
         ch = self.model.character
         compact = inset < Space.md
-        right = w - inset - 2 * badge_r - (Space.xs if compact else Space.sm)   # mép phải trước huy hiệu
+        right = w - inset                             # không còn huy hiệu: dùng hết chiều ngang
         max_w = right - inset
         gap = Space.xs if compact else Space.sm       # khoảng cách avatar -> chữ
         floor = Size.min_text if compact else Size.caption   # thẻ nhỏ cho tên nhỏ hơn để clue còn chỗ
@@ -260,7 +263,7 @@ class CharacterCard:
                     continue
                 avatar = self._avatar(av_size)
                 group_w = (av_size + gap if avatar is not None else 0) + text_w
-                x = max(inset, min((w - group_w) // 2, right - group_w))   # giữa thẻ, lùi trái nếu chạm huy hiệu
+                x = (w - group_w) // 2
                 cy = inset + av_size // 2
                 if avatar is not None:
                     face.blit(avatar, avatar.get_rect(midleft=(x, cy)))
@@ -301,11 +304,13 @@ class CharacterCard:
         img = face if (w, h) == face.get_size() else pygame.transform.smoothscale(face, (w, h))
         r = img.get_rect(center=(self.rect.centerx + self._shake_offset(), self.rect.centery))
         surface.blit(img, r)
+        if self.dimmed:
+            draw_rect_alpha(surface, (*Color.bg[:3], DIM_ALPHA), r, self.RADIUS)
 
         if hovered and front:
             draw_rect_alpha(surface, Color.hover_overlay, r, self.RADIUS)
 
-        if selected:
+        if selected and self.role is None:
             ring_w = min(Stroke.thick, max(1, w // 2))
             pygame.draw.rect(surface, Color.focus_edge, r, width=ring_w, border_radius=self.RADIUS)
             inner = r.inflate(-2 * ring_w, -2 * ring_w)
@@ -317,9 +322,7 @@ class CharacterCard:
             color = ROLE_COLOR[self.role]
             if not front:     # thẻ ngửa giữ màu trạng thái, chỉ vẽ viền
                 draw_rect_alpha(surface, (*color[:3], Color.role_tint), r, self.RADIUS)
-            outer = r.inflate(2 * ROLE_OUTSET, 2 * ROLE_OUTSET)
-            pygame.draw.rect(surface, color, outer, width=Stroke.thick,
-                             border_radius=self.RADIUS + ROLE_OUTSET)
+            pygame.draw.rect(surface, color, r, width=min(ROLE_W, max(1, w // 2)), border_radius=self.RADIUS)
 
         if self.hint:
             pulse = 0.5 - 0.5 * math.cos(2 * math.pi * HINT_HZ * self._hint_time)

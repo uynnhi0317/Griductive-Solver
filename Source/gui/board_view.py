@@ -86,9 +86,11 @@ class BoardView(Component):
             card.sync(self._model_for(state, cell))
 
     def set_highlights(self, roles: Mapping[Cell, Role]) -> None:
-        """Tô các ô theo vai trò; ô không có trong roles bị bỏ highlight"""
+        """Tô các ô theo vai trò; đang có clue được chọn thì thẻ không liên quan (trừ thẻ đang chọn) bị làm mờ"""
+        active = bool(roles)
         for cell, card in self.cards.items():
             card.role = roles.get(cell)
+            card.dimmed = active and card.role is None and cell != self.selected
 
     def shake(self, cell: Cell) -> None:
         """Rung thẻ khi verdict bị từ chối"""

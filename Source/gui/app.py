@@ -14,7 +14,7 @@ from .highlight import highlight_roles
 from .layout import MIN_WINDOW, compute_layout
 from .sidebar import Sidebar
 from .theme import Color, Level, clear_caches
-from .widgets import ToastManager
+from .verdict_popup import ResultDialog, VerdictDialog
 from .action_log import ActionLog
 from agent.logic_agent import AgentInvariantError, Hint, LogicAgent, find_hint
 from agent.trace import AgentStatus
@@ -24,7 +24,7 @@ RESCALE_WINDOW = 0.8
 FPS = 60
 MAX_FRAME_DT = 0.1       # chặn dt khi một frame bị treo (hộp thoại Load, SAT query chậm) để animation không nhảy vọt
 SAT_TIME_LIMIT = 10.0     # giây cho mỗi SAT query; solver chạy trên luồng UI nên giới hạn này cũng là thời gian treo tối đa
-DEFAULT_STATUS = "Select a card (click or arrow keys), then press C for Criminal or I for Innocent."
+DEFAULT_STATUS = "Click a face-down card to give your verdict (or use arrow keys, then Enter / C / I)."
 
 _ARROWS = {pygame.K_UP: (-1, 0), pygame.K_DOWN: (1, 0), pygame.K_LEFT: (0, -1), pygame.K_RIGHT: (0, 1)}
 _BLOCKING_MODS = pygame.KMOD_CTRL | pygame.KMOD_ALT | pygame.KMOD_META
@@ -53,14 +53,13 @@ class App:
         self.layout = compute_layout(self.screen.get_size())
         self.topbar = TopBar(self.layout.top_bar, lambda: self._nav(-1), lambda: self._nav(1))
         self.statusbar = StatusBar(self.layout.status)
-        self.toasts = ToastManager()
+        self.verdict_dialog = VerdictDialog(self._choose_verdict, self._cancel_verdict)
+        self.result_dialog = ResultDialog(self._close_overlay)
         self.agent: LogicAgent | None = None
         self.log = ActionLog()
         self.auto_running = False
         self._auto_wait = 0.0
         self.actionbar = ActionBar(
-            on_verdict=self._verdict,
-            on_verdict_blocked=self._warn_select_first,
             on_hint=self._hint_action,
             on_auto_solve=self._toggle_auto,
             on_restart=self._restart,
@@ -94,18 +93,19 @@ class App:
         self.topbar.fit(lay.top_bar)
         self.actionbar.fit(lay.action_bar)
         self.statusbar.fit(lay.status)
-        self.toasts.fit(lay.board)
         self.board.fit(lay.board)
         self.panel.fit(lay.sidebar)
         screen = self.screen.get_rect()
         self.guide.fit(screen)
         self.loader.fit(screen)
+        self.verdict_dialog.fit(screen)
+        self.result_dialog.fit(screen)
 
     def _event_order(self):
         return (self.topbar, self.actionbar, self.statusbar, self.panel, self.board)
 
     def _draw_order(self):
-        return (self.topbar, self.actionbar, self.statusbar, self.panel, self.board, self.toasts)
+        return (self.topbar, self.actionbar, self.statusbar, self.panel, self.board)
 
     def _say(self, message: str, level: Level = Level.INFO) -> None:
         self.statusbar.say(message, level)
@@ -130,8 +130,7 @@ class App:
         self._stop_auto()
         self.stage_index = stage_index
         self.selected = None
-        self.board = BoardView(engine.state, self.layout.board,
-                               on_select=lambda cell: self._select(cell, toggle=True))
+        self.board = BoardView(engine.state, self.layout.board, on_select=self._on_card_click)
         self.panel = Sidebar(engine.state, self._snapshot(), self.layout.sidebar,
                             on_select=lambda cell: self._select(cell, toggle=True))
         self._apply_selection()
@@ -157,7 +156,6 @@ class App:
             "Custom file" if self.stage_index is None else f"Stage {self.stage_index + 1}/{len(self.stages)}",
             f"Revealed {len(self.state.cards)}/{total}   SAT calls {sat_calls}",
         )
-        self.actionbar.set_verdict_enabled(self._can_call())
 
     def _can_call(self) -> bool:
         return self.selected is not None and not self.state.is_known(self.selected) and not self.auto_running
@@ -172,7 +170,6 @@ class App:
         else:
             target = (self.stage_index + delta) % len(self.stages)
         if self._load_stage(target):
-            self.toasts.clear()
             self._say(f"Loaded {self.engine.title or self.engine.puzzle_id}.", Level.OK)
         else:
             self._fail(f"Could not load {self.stages[target].name} (see console).")
@@ -182,13 +179,11 @@ class App:
         self.engine.restart()
         self.log.clear()
         self.selected = None
-        self.toasts.clear()
         self._sync_views()
         self._say("Restarted.", Level.OK)
 
     def _fail(self, message: str) -> None:
         self._say(message, Level.ERROR)
-        self.toasts.show(message, Level.ERROR)
 
     def _who(self, cell: Cell) -> str:
         return f"{cell.label} {self.state.board.character_at(cell).name}"
@@ -197,7 +192,6 @@ class App:
         """Người chơi gọi verdict khi chưa có thẻ úp nào được chọn (bấm nút xám hoặc phím C / I)"""
         msg = "Auto Solve is running. Press Stop first." if self.auto_running else "Select a face-down card first."
         self._say(msg, Level.WARN)
-        self.toasts.show(msg, Level.WARN)
 
     def _verdict(self, status: Status) -> None:
         """Người chơi gọi ô đang chọn là status; engine quyết định bằng entailment trên PublicState"""
@@ -231,21 +225,20 @@ class App:
             if self.engine.is_solved():
                 msg = f"Solved! {who} is {status.value}, last card revealed ({queries})."
                 self._say(msg, Level.OK)
-                self.toasts.show("Puzzle solved!", Level.OK)
             else:
                 self._say(f"{who} is {status.value}. New clue revealed ({queries}).", Level.OK)
-                self.toasts.show(f"{who} is {status.value}", Level.OK)
             return
 
         self.board.shake(cell)
         if outcome is VerdictOutcome.NOT_PROVABLE:
             self._say(f"NOT PROVABLE: neither status of {who} is forced by the revealed clues ({queries}).", Level.WARN)
-            self.toasts.show(f"NOT PROVABLE: {who} is not forced yet", Level.WARN)
         elif outcome is VerdictOutcome.CONTRADICTED:
             self._say(f"CONTRADICTED: {who} cannot be {status.value}; the opposite verdict is forced ({queries}).", Level.ERROR)
-            self.toasts.show(f"CONTRADICTED: {who} is not {status.value}", Level.ERROR)
         else:   # INCONSISTENT
             self._fail("INCONSISTENT: the revealed clues contradict each other (puzzle or encoder bug).")
+        if outcome in (VerdictOutcome.NOT_PROVABLE, VerdictOutcome.CONTRADICTED):
+            self.result_dialog.open(outcome, self.state.board.character_at(cell).name, status)
+            self.overlay = self.result_dialog
         self.panel.refresh(self.state, self._snapshot())   # verdict bị từ chối cũng nằm trong history
         self._refresh_chrome()          # số SAT calls tăng kể cả khi bị từ chối
 
@@ -259,6 +252,21 @@ class App:
     def _close_overlay(self) -> None:
         self.overlay = None
 
+    def _open_verdict_dialog(self) -> None:
+        """Hộp thoại giữa màn hình cho thẻ úp đang chọn: Innocent / Criminal / Cancel"""
+        cell = self.selected
+        ch = self.state.board.character_at(cell)
+        self.verdict_dialog.open(ch.name, ch.profession, cell.label)
+        self.overlay = self.verdict_dialog
+
+    def _choose_verdict(self, status: Status) -> None:
+        self.overlay = None
+        self._verdict(status)
+
+    def _cancel_verdict(self) -> None:
+        self.overlay = None
+        self._announce_selection()
+
     def _open_load(self) -> None:
         """Nút Load / phím L: mở overlay chọn màn (chỉ đọc title và size của từng file)"""
         if self.auto_running:
@@ -270,7 +278,6 @@ class App:
     def _apply_load(self, index: int) -> None:
         self.overlay = None
         if self._load_stage(index):
-            self.toasts.clear()
             self._say(f"Loaded {self.engine.title or self.engine.puzzle_id}.", Level.OK)
         else:
             self._fail(f"Could not load {self.stages[index].name} (see console).")
@@ -299,7 +306,6 @@ class App:
             return
         if hint is None:
             self._say("No hint: no character is forced by the revealed clues. The solver will not guess.", Level.WARN)
-            self.toasts.show("No forced verdict available", Level.WARN)
             return
 
         # a selected revealed card would paint its clue regions, which could include the target
@@ -317,7 +323,6 @@ class App:
             self._say(f"Hint 1/2: the highlighted cards hold the clues that prove a verdict ({owners}). Press Reveal for the card.")
         else:
             self._say("Hint 1/2: a verdict follows from the known verdicts alone. Press Reveal for the card.")
-        self.toasts.show("Hint: study the highlighted clues", Level.INFO)
 
     def _hint_show_target(self) -> None:
         self._hint_stage = 2
@@ -326,7 +331,6 @@ class App:
         self.actionbar.set_hint_stage(2)
         who = self._who(self._hint.cell)
         self._say(f"Hint 2/2: {who} can be proved. Press Clear to dismiss.")
-        self.toasts.show(f"Hint: look at {who}", Level.INFO)
 
     def _reset_hint(self) -> None:
         self._hint = None
@@ -385,17 +389,23 @@ class App:
         trace = self.agent.trace
         if status is AgentStatus.SOLVED:
             self._say(f"Auto Solve finished: puzzle solved ({trace.num_steps} verdicts by the agent).", Level.OK)
-            self.toasts.show("Puzzle solved!", Level.OK)
         elif status is AgentStatus.AMBIGUOUS:
             n = len(trace.final_unknown)
             self._say(f"Auto Solve stopped: {n} card(s) still UNKNOWN and none is forced. The agent will not guess.", Level.WARN)
-            self.toasts.show("Stuck: no forced verdict", Level.WARN)
         elif status is AgentStatus.INCONSISTENT:
             self._fail("INCONSISTENT: the revealed clues contradict each other (puzzle or encoder bug).")
         else:   # TIMEOUT
             self._fail(f"Solver timed out after {SAT_TIME_LIMIT:g}s; Auto Solve stopped.")
 
     # _____________________________________________________________selection
+    def _on_card_click(self, cell: Cell | None) -> None:
+        """Bấm thẻ úp: chọn và mở hộp thoại phán quyết; thẻ đã lật / chỗ trống: chọn hoặc bỏ chọn như cũ"""
+        if cell is not None and not self.state.is_known(cell) and not self.auto_running:
+            self._select(cell)
+            self._open_verdict_dialog()
+        else:
+            self._select(cell, toggle=True)
+
     def _select(self, cell: Cell | None, toggle: bool = False) -> None:
         """Chọn ô; toggle=True (click chuột): bấm lại ô đang chọn thì bỏ chọn"""
         self.selected = None if toggle and cell is not None and cell == self.selected else cell
@@ -419,7 +429,7 @@ class App:
             return
         status = self.state.status_of(cell)
         if status is None:
-            self._say(f"{self._who(cell)}: press C for Criminal or I for Innocent.")
+            self._say(f"{self._who(cell)}: press Enter to give your verdict, or C / I.")
         else:
             self._say(f"{self._who(cell)} is {status.value}. Highlighting the cells its clue refers to.")
 
@@ -439,6 +449,8 @@ class App:
             return False
         if e.key in _ARROWS:
             self._move_selection(*_ARROWS[e.key])
+        elif e.key in (pygame.K_RETURN, pygame.K_KP_ENTER) and self._can_call():
+            self._open_verdict_dialog()
         elif e.key == pygame.K_c:
             self._verdict(Status.CRIMINAL)
         elif e.key == pygame.K_i:
@@ -487,8 +499,7 @@ class App:
 
     # ___________________________________________________________________show
     def update(self, dt: float) -> None:
-        for component in (self.board, self.toasts):
-            component.update(dt)
+        self.board.update(dt)
         if self.auto_running:
             self._auto_wait -= dt
             if self._auto_wait <= 0:

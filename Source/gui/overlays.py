@@ -71,9 +71,9 @@ class Overlay(Component):
 
 # ------------------------------------------------------------------ guide
 _GUIDE_ROWS = (
-    ("Click / Arrows", "Select a card"),
+    ("Click a card", "Open the verdict dialog for that card"),
     ("Click a clue", "Highlight the cells it refers to"),
-    ("C  /  I", "Call the card Criminal / Innocent"),
+    ("Arrows + Enter / C / I", "Select a card and give a verdict by keyboard"),
     ("H", "Hint: clues, then the card, then clear"),
     ("A", "Auto Solve / Stop"),
     ("Esc", "Deselect, or stop Auto Solve"),
