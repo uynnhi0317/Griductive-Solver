@@ -1,73 +1,51 @@
 """
-Stats Panel — thống kê hiệu suất của bộ giải (solver) trong phiên chơi hiện tại.
+Stats Panel — thống kê hiệu suất của bộ giải trong phiên chơi hiện tại.
 
-Tổng hợp dữ liệu SolverStats từ tất cả các mục VerdictResult trong engine.history
-và hiển thị:
-  • bảng thống kê theo từng kết quả phán định: bước N | kết quả | số lần gọi SAT | số quyết định | số phép lan truyền
-  • hàng tổng kết các giá trị tích lũy
-  • thông tin nội bộ của bộ giải: số quyết định, số phép lan truyền,
-    số literal thuần, số lần quay lui và thời gian thực thi
+Dữ liệu lấy từ LogSnapshot (engine.history + các bước của agent):
+  • bảng theo từng verdict: bước | nhân vật | verdict | SAT | quyết định | phép lan truyền
+    SAT / Dec / Prop = truy vấn của ENGINE + truy vấn của AGENT (nếu verdict do agent nộp)
+  • dòng "Agent final check" nếu agent dừng sau một lần phân loại không dẫn tới verdict
+  • hàng tổng kết và khối thống kê (tách SAT của engine và của agent)
 
-Bảng này được thiết kế chỉ để đọc và không lưu trữ trạng thái riêng
-(không cần cuộn đối với kích thước câu đố thông thường; thanh cuộn sẽ được
-thêm vào nếu nội dung vượt quá không gian hiển thị).
+Dòng của agent có vạch xanh bên trái. Panel chỉ đọc, dựng lại mỗi lần refresh().
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import pygame
 
-from engine.game_engine import VerdictOutcome
 from game.board import Board
-from solver.stats import SolverStats
+from .action_log import Actor, LogSnapshot
 from .component import Component
 from .theme import (
     Color, Radius, Size, Space, SCROLLBAR_W,
-    get_font, render_text, draw_scrollbar
+    ellipsize, get_font, render_text, draw_scrollbar
 )
-
-if TYPE_CHECKING:
-    from engine.game_engine import VerdictResult
 
 PAD = Space.md
 ROW_H = 28
 ROW_GAP = Space.xs
 WHEEL_STEP = 48
 SECTION_GAP = Space.lg
+STRIPE_W = 3
 
 _COL_STEP = 44
-_COL_WHO = 120
-_COL_VERDICT = 80
+_COL_VERDICT = 88
 _COL_SAT = 48
 _COL_DEC = 56
 _COL_PROP = 56
 
 
-def _fmt(n: int | float, decimals: int = 0) -> str:
-    if decimals:
-        return f"{n:.{decimals}f}"
-    return str(int(n))
-
-
 class StatsPanel(Component):
-    """
-    Hiển thị thống kê của bộ giải được tổng hợp từ engine.history.
-    Nhận một tuple history mới mỗi khi refresh() được gọi.
-    """
-
-    def __init__(self, board: Board,
-                 history: tuple[VerdictResult, ...],
-                 area: pygame.Rect) -> None:
+    def __init__(self, board: Board, snap: LogSnapshot, area: pygame.Rect) -> None:
         self._board = board
         self.area = pygame.Rect(area)
         self.scroll = 0
         self._content_h = 0
         self._rows: list[dict] = []
-        self._totals: SolverStats = SolverStats()
-        self._total_sat: int = 0
-        self.refresh(history)
+        self._totals_row: dict = {}
+        self._summary: list[tuple[str, str]] = []
+        self.refresh(snap)
 
     # --------------------------------------------------------------- layout
     def fit(self, area: pygame.Rect) -> None:
@@ -75,14 +53,12 @@ class StatsPanel(Component):
         self._recalc_content_h()
 
     def _recalc_content_h(self) -> None:
-        """Ước tính tổng chiều cao nội dung để xác định kích thước scrollbar."""
         n = len(self._rows)
-        # header + rows + totals row + gap + summary block
-        self._content_h = (ROW_H          # column header
+        self._content_h = (ROW_H
                            + n * (ROW_H + ROW_GAP)
-                           + ROW_H        # totals
+                           + ROW_H + ROW_GAP          # totals
                            + SECTION_GAP
-                           + 7 * (ROW_H + ROW_GAP))   # summary stats
+                           + (len(self._summary) + 1) * (ROW_H + ROW_GAP))   # summary + legend
         self.scroll = max(0, min(self.scroll, self._max_scroll))
 
     @property
@@ -94,51 +70,63 @@ class StatsPanel(Component):
         return max(0, self._content_h - self._viewport.h)
 
     # --------------------------------------------------------------- update
-    def refresh(self, history: tuple[VerdictResult, ...]) -> None:
-        """Xây dựng lại các hàng dữ liệu hiển thị từ lịch sử của engine."""
+    def refresh(self, snap: LogSnapshot) -> None:
         rows = []
-        totals = SolverStats()
-        total_sat = 0
         step = 0
-        for r in history:
-            char = self._board.character_at(r.cell)
-            accepted = r.outcome is VerdictOutcome.ACCEPTED
-            if accepted:
+        for e in snap.entries:
+            if e.accepted:
                 step += 1
-            # tổng hợp thống kê từ tất cả SatQuery trong kết quả phán định này
-            q_stats = SolverStats()
-            for q in r.queries:
-                q_stats.merge(q.stats)
-            totals.merge(q_stats)
-            total_sat += r.sat_queries
+            st = e.stats()
             rows.append({
-                "step": step if accepted else "-",
-                "who": char.name,
-                "verdict": r.submitted.value,
-                "accepted": accepted,
-                "sat": r.sat_queries,
-                "dec": q_stats.decisions,
-                "prop": q_stats.propagations,
-                "bt": q_stats.backtracks,
-                "rt_ms": q_stats.runtime * 1000,
+                "step": step if e.accepted else "-",
+                "who": self._board.character_at(e.result.cell).name,
+                "verdict": e.result.submitted.value,
+                "accepted": e.accepted,
+                "agent": e.actor is Actor.AGENT,
+                "sat": e.sat_queries,
+                "dec": st.decisions,
+                "prop": st.propagations,
             })
+
+        end = snap.end
+        if end is not None and end.queries:
+            rows.append({
+                "step": "-", "who": "Agent final check", "verdict": end.status.value,
+                "accepted": False, "agent": True, "sat": end.queries,
+                "dec": end.stats.decisions, "prop": end.stats.propagations,
+            })
+
+        t = snap.stats()
         self._rows = rows
-        self._totals = totals
-        self._total_sat = total_sat
+        self._totals_row = {"sat": snap.total_sat, "dec": t.decisions, "prop": t.propagations}
+        self._summary = [
+            ("SAT queries (total)", str(snap.total_sat)),
+            ("  by engine", str(snap.engine_sat)),
+            ("  by agent", str(snap.agent_sat)),
+            ("Decisions", str(t.decisions)),
+            ("Propagations", str(t.propagations)),
+            ("Pure literals", str(t.pure_literals)),
+            ("Backtracks", str(t.backtracks)),
+            ("Runtime", f"{t.runtime * 1000:.3f} ms"),
+        ]
         self._recalc_content_h()
 
     # --------------------------------------------------------------- events
     def handle_event(self, e: pygame.event.Event) -> bool:
         if e.type == pygame.MOUSEWHEEL:
             if self.area.collidepoint(pygame.mouse.get_pos()):
-                self.scroll = max(0, min(self.scroll - e.y * WHEEL_STEP,
-                                         self._max_scroll))
+                self.scroll = max(0, min(self.scroll - e.y * WHEEL_STEP, self._max_scroll))
                 return True
         return False
 
     # ------------------------------------------------------------------ draw
     def draw(self, surface: pygame.Surface) -> None:
         vp = self._viewport
+        if not self._rows:
+            msg = render_text("No moves yet", Size.body, Color.text_dim)
+            surface.blit(msg, msg.get_rect(center=vp.center))
+            return
+
         old_clip = surface.get_clip()
         surface.set_clip(vp)
 
@@ -146,138 +134,97 @@ class StatsPanel(Component):
         x0 = vp.x + PAD
         content_w = vp.w - 2 * PAD - SCROLLBAR_W
 
-        if not self._rows:
-            surface.set_clip(old_clip)
-            msg = render_text("No moves yet", Size.body, Color.text_dim)
-            surface.blit(msg, msg.get_rect(center=vp.center))
-            return
-
-        # --- column header ---
         y = self._draw_header(surface, x0, content_w, y)
-
-        # --- per-verdict rows ---
         for row in self._rows:
             if vp.y <= y + ROW_H and y < vp.bottom:
                 y = self._draw_row(surface, row, x0, content_w, y)
             else:
                 y += ROW_H + ROW_GAP
 
-        # --- totals ---
         y = self._draw_totals(surface, x0, content_w, y)
-
-        # --- summary block ---
         y += SECTION_GAP
-        y = self._draw_summary(surface, x0, content_w, y, vp)
+        self._draw_summary(surface, x0, content_w, y, vp)
 
         surface.set_clip(old_clip)
         draw_scrollbar(surface, vp, self._content_h, self.scroll, self._max_scroll)
 
     # ---------------------------------------------------------------- helpers
-    def _cols(self, x0: int, w: int) -> list[tuple[str, int, str]]:
-        """(nhãn, tọa độ x, căn lề) cho từng cột dựa trên chiều rộng khả dụng."""
-        # Các cột có chiều rộng cố định trước, sau đó phân bổ phần chiều rộng còn lại cho cột 'who'
+    def _cols(self, x0: int, w: int) -> list[tuple[str, int, str, int]]:
+        """(nhãn, x, căn lề, bề rộng tối đa của chữ) cho từng cột"""
         fixed = _COL_STEP + _COL_VERDICT + _COL_SAT + _COL_DEC + _COL_PROP
         who_w = max(60, w - fixed)
-        cols = [
-            ("#",        x0,                               "r"),
-            ("Character",x0 + _COL_STEP,                  "l"),
-            ("Verdict",  x0 + _COL_STEP + who_w,          "l"),
-            ("SAT",      x0 + _COL_STEP + who_w + _COL_VERDICT, "r"),
-            ("Dec",      x0 + _COL_STEP + who_w + _COL_VERDICT + _COL_SAT, "r"),
-            ("Prop",     x0 + _COL_STEP + who_w + _COL_VERDICT + _COL_SAT + _COL_DEC, "r"),
+        xs = [x0,
+              x0 + _COL_STEP,
+              x0 + _COL_STEP + who_w,
+              x0 + _COL_STEP + who_w + _COL_VERDICT,
+              x0 + _COL_STEP + who_w + _COL_VERDICT + _COL_SAT,
+              x0 + _COL_STEP + who_w + _COL_VERDICT + _COL_SAT + _COL_DEC]
+        return [
+            ("#", xs[0], "r", _COL_STEP),
+            ("Character", xs[1], "l", who_w - Space.sm),
+            ("Verdict", xs[2], "l", _COL_VERDICT - Space.sm),
+            ("SAT", xs[3], "r", _COL_SAT),
+            ("Dec", xs[4], "r", _COL_DEC),
+            ("Prop", xs[5], "r", _COL_PROP),
         ]
-        return cols
+
+    def _blit_cell(self, surface, font, text, color, cx, align, max_w, y) -> None:
+        txt = font.render(ellipsize(text, font, max_w), True, color)
+        if align == "r":
+            surface.blit(txt, txt.get_rect(midright=(cx + _COL_STEP - Space.sm, y + ROW_H // 2)))
+        else:
+            surface.blit(txt, txt.get_rect(midleft=(cx, y + ROW_H // 2)))
 
     def _draw_header(self, surface, x0, w, y) -> int:
-        cols = self._cols(x0, w)
         font = get_font(Size.caption, True)
-        for label, cx, align in cols:
-            txt = font.render(label, True, Color.text_dim)
-            if align == "r":
-                surface.blit(txt, txt.get_rect(midright=(cx + _COL_STEP - Space.sm, y + ROW_H // 2)))
-            else:
-                surface.blit(txt, txt.get_rect(midleft=(cx, y + ROW_H // 2)))
-        # divider
-        pygame.draw.line(surface, Color.border,
-                         (x0, y + ROW_H - 1),
-                         (x0 + w, y + ROW_H - 1))
+        for label, cx, align, max_w in self._cols(x0, w):
+            self._blit_cell(surface, font, label, Color.text_dim, cx, align, max_w, y)
+        pygame.draw.line(surface, Color.border, (x0, y + ROW_H - 1), (x0 + w, y + ROW_H - 1))
         return y + ROW_H
 
     def _draw_row(self, surface, row: dict, x0: int, w: int, y: int) -> int:
-        # row bg
         rect = pygame.Rect(x0, y, w, ROW_H)
-        bg = Color.surface_2 if row["accepted"] else Color.surface_1
-        pygame.draw.rect(surface, bg, rect, border_radius=Radius.control)
-        if not row["accepted"]:
-            # làm mờ màu chữ đối với các kết quả phán định bị từ chối
-            pass
+        pygame.draw.rect(surface, Color.surface_2 if row["accepted"] else Color.surface_1,
+                         rect, border_radius=Radius.control)
+        if row["agent"]:
+            pygame.draw.rect(surface, Color.fb_info, pygame.Rect(rect.x, rect.y, STRIPE_W, rect.h),
+                             border_top_left_radius=Radius.control,
+                             border_bottom_left_radius=Radius.control)
 
-        cols = self._cols(x0, w)
-        values = [
-            str(row["step"]),
-            row["who"],
-            row["verdict"],
-            str(row["sat"]),
-            str(row["dec"]),
-            str(row["prop"]),
-        ]
+        values = [str(row["step"]), row["who"], row["verdict"],
+                  str(row["sat"]), str(row["dec"]), str(row["prop"])]
         color = Color.text if row["accepted"] else Color.text_dim
         font = get_font(Size.body)
-        for (label, cx, align), val in zip(cols, values):
-            txt = font.render(val, True, color)
-            if align == "r":
-                surface.blit(txt, txt.get_rect(midright=(cx + _COL_STEP - Space.sm, y + ROW_H // 2)))
-            else:
-                surface.blit(txt, txt.get_rect(midleft=(cx, y + ROW_H // 2)))
+        for (_, cx, align, max_w), val in zip(self._cols(x0, w), values):
+            self._blit_cell(surface, font, val, color, cx, align, max_w, y)
         return y + ROW_H + ROW_GAP
 
     def _draw_totals(self, surface, x0, w, y) -> int:
-        # divider bên trên totals
-        pygame.draw.line(surface, Color.border,
-                         (x0, y), (x0 + w, y))
+        pygame.draw.line(surface, Color.border, (x0, y), (x0 + w, y))
         y += ROW_GAP
-        rect = pygame.Rect(x0, y, w, ROW_H)
-        pygame.draw.rect(surface, Color.surface_3, rect, border_radius=Radius.control)
-
-        cols = self._cols(x0, w)
-        t = self._totals
-        values = [
-            "Σ",
-            "",
-            "",
-            str(self._total_sat),
-            str(t.decisions),
-            str(t.propagations),
-        ]
+        pygame.draw.rect(surface, Color.surface_3, pygame.Rect(x0, y, w, ROW_H),
+                         border_radius=Radius.control)
+        t = self._totals_row
+        values = ["Σ", "", "", str(t["sat"]), str(t["dec"]), str(t["prop"])]
         font = get_font(Size.body, True)
-        for (label, cx, align), val in zip(cols, values):
-            if not val:
-                continue
-            txt = font.render(val, True, Color.text)
-            if align == "r":
-                surface.blit(txt, txt.get_rect(midright=(cx + _COL_STEP - Space.sm, y + ROW_H // 2)))
-            else:
-                surface.blit(txt, txt.get_rect(midleft=(cx, y + ROW_H // 2)))
+        for (_, cx, align, max_w), val in zip(self._cols(x0, w), values):
+            if val:
+                self._blit_cell(surface, font, val, Color.text, cx, align, max_w, y)
         return y + ROW_H
 
     def _draw_summary(self, surface, x0, w, y, vp) -> int:
-        """Hiển thị khối thống kê tổng hợp của bộ giải."""
-        t = self._totals
-        lines = [
-            ("SAT queries (total)",     str(self._total_sat)),
-            ("Decisions",               str(t.decisions)),
-            ("Propagations",            str(t.propagations)),
-            ("Pure literals",           str(t.pure_literals)),
-            ("Backtracks",              str(t.backtracks)),
-            ("Runtime",                 f"{t.runtime * 1000:.3f} ms"),
-        ]
         label_font = get_font(Size.body)
         value_font = get_font(Size.body, True)
-        for label, value in lines:
+        for label, value in self._summary:
             if vp.y <= y + ROW_H and y < vp.bottom:
                 ltxt = label_font.render(label, True, Color.text_dim)
                 vtxt = value_font.render(value, True, Color.text)
                 surface.blit(ltxt, ltxt.get_rect(midleft=(x0, y + ROW_H // 2)))
                 surface.blit(vtxt, vtxt.get_rect(midright=(x0 + w, y + ROW_H // 2)))
             y += ROW_H + ROW_GAP
-        return y
+
+        if vp.y <= y + ROW_H and y < vp.bottom:
+            pygame.draw.rect(surface, Color.fb_info, pygame.Rect(x0, y + ROW_H // 2 - 6, STRIPE_W, 12))
+            note = render_text("Agent step (SAT = agent + engine)", Size.caption, Color.text_dim)
+            surface.blit(note, note.get_rect(midleft=(x0 + STRIPE_W + Space.sm, y + ROW_H // 2)))
+        return y + ROW_H + ROW_GAP

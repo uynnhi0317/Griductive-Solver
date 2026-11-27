@@ -14,6 +14,7 @@ from .layout import MIN_WINDOW, compute_layout
 from .sidebar import Sidebar
 from .theme import Color, Level, clear_caches
 from .widgets import ToastManager
+from .action_log import ActionLog
 from agent.logic_agent import AgentInvariantError, LogicAgent, find_hint
 from agent.trace import AgentStatus
 
@@ -50,6 +51,7 @@ class App:
         self.statusbar = StatusBar(self.layout.status)
         self.toasts = ToastManager()
         self.agent: LogicAgent | None = None
+        self.log = ActionLog()
         self.auto_running = False
         self._auto_wait = 0.0
         self.actionbar = ActionBar(
@@ -97,7 +99,7 @@ class App:
         return (self.topbar, self.actionbar, self.statusbar, self.panel, self.board)
 
     def _draw_order(self):
-        return (self.topbar, self.actionbar, self.statusbar, self.panel, self.board)
+        return (self.topbar, self.actionbar, self.statusbar, self.panel, self.board, self.toasts)
 
     def _say(self, message: str, level: Level = Level.INFO) -> None:
         self.statusbar.say(message, level)
@@ -115,13 +117,14 @@ class App:
             return False
         self.engine = engine
         self.agent = None
+        self.log.clear()
         self._stop_auto()
         self.stage_index = stage_index
         self.selected = None
         self.board = BoardView(engine.state, self.layout.board,
                                on_select=lambda cell: self._select(cell, toggle=True))
-        self.panel = Sidebar(engine.state, engine.history, self.layout.sidebar,
-                             on_select=lambda cell: self._select(cell, toggle=True))
+        self.panel = Sidebar(engine.state, self._snapshot(), self.layout.sidebar,
+                            on_select=lambda cell: self._select(cell, toggle=True))
         self._apply_selection()
         self._refresh_chrome()
         self._say(DEFAULT_STATUS)
@@ -133,13 +136,13 @@ class App:
         """Đẩy PublicState mới của engine xuống các view"""
         self.board.set_hint(None)
         self.board.refresh(self.state)
-        self.panel.refresh(self.state, self.engine.history)
+        self.panel.refresh(self.state, self._snapshot())
         self._apply_selection()
         self._refresh_chrome()
 
     def _refresh_chrome(self) -> None:
         total = self.state.board.size ** 2
-        sat_calls = sum(r.sat_queries for r in self.engine.history)
+        sat_calls = self._snapshot().total_sat
         self.topbar.set_info(
             self.engine.title or self.engine.puzzle_id,
             "Custom file" if self.stage_index is None else f"Stage {self.stage_index + 1}/{len(self.stages)}",
@@ -149,7 +152,10 @@ class App:
 
     def _can_call(self) -> bool:
         return self.selected is not None and not self.state.is_known(self.selected) and not self.auto_running
-    
+
+    def _snapshot(self):
+        return self.log.snapshot(self.engine.history)
+
     # ______________________________________________________________actions
     def _nav(self, delta: int) -> None:
         if self.stage_index is None:        # đang ở file ngoài danh sách: tiến thì vào màn đầu, lùi thì vào màn cuối
@@ -165,6 +171,7 @@ class App:
     def _restart(self) -> None:
         self._stop_auto()
         self.engine.restart()
+        self.log.clear()
         self.selected = None
         self.toasts.clear()
         self._sync_views()
@@ -210,6 +217,7 @@ class App:
         outcome = result.outcome
 
         if outcome is VerdictOutcome.ACCEPTED:
+            self.log.clear_end()
             self._sync_views()          # thẻ lật, clue mới vào panel; ô vẫn được chọn nên clue của nó được highlight
             if self.engine.is_solved():
                 msg = f"Solved! {who} is {status.value}, last card revealed ({queries})."
@@ -229,7 +237,7 @@ class App:
             self.toasts.show(f"CONTRADICTED: {who} is not {status.value}", Level.ERROR)
         else:   # INCONSISTENT
             self._fail("INCONSISTENT: the revealed clues contradict each other (puzzle or encoder bug).")
-        self.panel.refresh(self.state, self.engine.history)   # verdict bị từ chối cũng nằm trong history
+        self.panel.refresh(self.state, self._snapshot())   # verdict bị từ chối cũng nằm trong history
         self._refresh_chrome()          # số SAT calls tăng kể cả khi bị từ chối
 
     # ______________________________________________________________overlays
@@ -325,14 +333,17 @@ class App:
             return
         if step is not None:
             self.selected = step.cell       # chọn thẻ vừa giải: flip + highlight clue vừa lộ
+            self.log.record_agent_step(len(self.engine.history) - 1, step)
             self._sync_views()
             self._say(f"Auto: {self._who(step.cell)} is {step.verdict.value} "
                       f"(step {step.step}, {step.sat_queries + step.engine_queries} SAT queries).", Level.OK)
         if self.agent.status.is_terminal:
             self._auto_finish(self.agent.status)
 
-    def _auto_finish(self, status: AgentStatus) -> None:
+    def _auto_finish(self, status):
         self._stop_auto()
+        self.log.record_end(self.agent.trace)
+        self.panel.refresh(self.state, self._snapshot())
         self._refresh_chrome()
         trace = self.agent.trace
         if status is AgentStatus.SOLVED:

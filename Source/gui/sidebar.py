@@ -21,15 +21,15 @@ from dataclasses import dataclass
 
 import pygame
 
-from game.board import Board
 from game.cell import Cell
 from game.public_state import PublicState
 from .clue_panel import CluePanel
 from .component import Component
 from .stats_panel import StatsPanel
-from .trace_panel import TracePanel
-from .theme import Color, Radius, Size, Space, Stroke, render_text
+from .history_panel import HistoryPanel
+from .theme import Color, Radius, Space
 from .widgets import TabBar, TAB_H
+from .action_log import LogSnapshot
 
 if TYPE_CHECKING:
     from engine.game_engine import VerdictResult
@@ -41,7 +41,7 @@ PAD = Space.sm
 class TabContext:
     """Toàn bộ dữ liệu cần thiết để khởi tạo mọi bảng giao diện."""
     state: PublicState
-    history: tuple[VerdictResult, ...]
+    snap: LogSnapshot
     area: pygame.Rect
     on_select: Callable[[Cell], None] | None = None
 
@@ -56,13 +56,13 @@ class TabSpec:
 _TABS: list[TabSpec] = [
     TabSpec("Clues",
             build=lambda c: CluePanel(c.state, c.area, on_select=c.on_select),
-            refresh=lambda p, state, history: p.refresh(state)),
-    TabSpec("Trace",
-            build=lambda c: TracePanel(c.state.board, c.history, c.area),
-            refresh=lambda p, state, history: p.refresh(history)),
+            refresh=lambda p, state, snap: p.refresh(state)),
+    TabSpec("History",
+            build=lambda c: HistoryPanel(c.state.board, c.snap, c.area),
+            refresh=lambda p, state, snap: p.refresh(snap)),
     TabSpec("Stats",
-            build=lambda c: StatsPanel(c.state.board, c.history, c.area),
-            refresh=lambda p, state, history: p.refresh(history)),
+            build=lambda c: StatsPanel(c.state.board, c.snap, c.area),
+            refresh=lambda p, state, snap: p.refresh(snap)),
 ]
 
 class Sidebar(Component):
@@ -74,7 +74,7 @@ class Sidebar(Component):
     _TAB_LABELS = ["Clues", "Trace", "Stats"]
 
     def __init__(self, state: PublicState,
-                 history: tuple[VerdictResult, ...],
+                 snap: LogSnapshot,
                  area: pygame.Rect,
                  on_select: Callable[[Cell], None] | None = None) -> None:
         self.area = pygame.Rect(area)
@@ -82,7 +82,7 @@ class Sidebar(Component):
         self._tabbar = TabBar([t.label for t in _TABS], on_change=self._on_tab_change)
         self._active = 0
 
-        ctx = TabContext(state, history, self._content_rect(area), on_select)
+        ctx = TabContext(state, snap, self._content_rect(area), on_select)
         self._panels: list[Component] = [t.build(ctx) for t in _TABS]
         self._fit_parts(area)
 
@@ -118,9 +118,9 @@ class Sidebar(Component):
 
     # --------------------------------------------------------------- update
     def refresh(self, state: PublicState,
-                history: tuple[VerdictResult, ...]) -> None:
+                snap: LogSnapshot) -> None:
         for spec, panel in zip(_TABS, self._panels):
-                spec.refresh(panel, state, history)
+                spec.refresh(panel, state, snap)
 
     # --------------------------------------------------------------- events
     def _on_tab_change(self, index: int) -> None:
