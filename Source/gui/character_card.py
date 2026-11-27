@@ -7,7 +7,7 @@ from game.cell import Cell
 from game.character import Character, Status
 from .highlight import Role
 from .theme import (
-    Color, Radius, Space, Size, Stroke, STATUS_COLOR, ROLE_COLOR,
+    Color, Face, Radius, Space, Size, Stroke, STATUS_COLOR, STAMP_COLOR, ROLE_COLOR,
     draw_rect_alpha, draw_status_icon, fit_line, fit_wrapped, get_font,
 )
 
@@ -21,6 +21,8 @@ SELECT_ANIM = 0.12      # giây để phóng to / thu lại
 ROLE_OUTSET = Space.xs
 HINT_HZ = 1.2           # nhịp đập của vòng gợi ý
 HINT_OUTSET = ROLE_OUTSET + Stroke.thick   # nằm ngoài vòng role, vẫn < Space.sm nên không đè thẻ kề
+STAMP_ANGLE = 6         # độ, nghiêng ngược chiều kim đồng hồ
+STAMP_ALPHA = 220
 
 
 @dataclass(frozen=True)
@@ -115,6 +117,24 @@ class CharacterCard:
         pygame.draw.rect(face, fill, face.get_rect(), border_radius=self.RADIUS)
         return face
 
+    def _render_stamp(self, w: int, h: int) -> pygame.Surface:
+        """Con dấu CRIMINAL / INNOCENT: chữ máy đánh trong khung đôi, nghiêng nhẹ, hơi trong như mực"""
+        status = self.model.status
+        ink = STAMP_COLOR[status]
+        font, text = fit_line(status.value, h // 9, int(w * 0.72) - 2 * Space.md,
+                              bold=True, face=Face.TYPEWRITER)
+        label = font.render(text, True, ink)
+        stamp = pygame.Surface((label.get_width() + 2 * Space.md, label.get_height() + 2 * Space.xs),
+                               pygame.SRCALPHA)
+        rect = stamp.get_rect()
+        pygame.draw.rect(stamp, ink, rect, width=Stroke.medium, border_radius=Radius.small)
+        pygame.draw.rect(stamp, ink, rect.inflate(-3 * Stroke.medium, -3 * Stroke.medium),
+                         width=Stroke.thin, border_radius=Radius.small)
+        stamp.blit(label, label.get_rect(center=rect.center))
+        stamp = pygame.transform.rotozoom(stamp, STAMP_ANGLE, 1.0)
+        stamp.set_alpha(STAMP_ALPHA)
+        return stamp
+
     def _render_back(self, fill) -> pygame.Surface:
         """Mặt úp: tên + nghề ở giữa, có viền sáng để tách khỏi nền"""
         w, h = self.rect.size
@@ -124,10 +144,10 @@ class CharacterCard:
         return face
 
     def _blit_centered_name_job(self, face: pygame.Surface, w: int, h: int,
-                                ink=Color.text, ink_dim=Color.text_dim) -> None:
+                                ink=Color.card_text, ink_dim=Color.card_text_dim) -> None:
         ch = self.model.character
         max_w = w - 2 * Space.md
-        font, text = fit_line(ch.name, h // 5, max_w, bold=True)
+        font, text = fit_line(ch.name, h // 5, max_w, bold=True, face=Face.DISPLAY)
         name = font.render(text, True, ink)
         font, text = fit_line(ch.profession, h // 7, max_w)
         job = font.render(text, True, ink_dim)
@@ -135,38 +155,38 @@ class CharacterCard:
         face.blit(job, job.get_rect(center=(w // 2, h * 3 // 5)))
 
     def _render_front(self) -> pygame.Surface:
-        """Mặt ngửa: huy hiệu X / tích ở góc, một dòng header, clue chiếm phần lớn thẻ"""
+        """Mặt ngửa: giấy da, viền màu trạng thái, huy hiệu ở góc, tên + nghề, clue, con dấu"""
         m = self.model
         w, h = self.rect.size
-        face = self._blank(STATUS_COLOR[m.status])
+        face = self._blank(Color.card_face)
+        pygame.draw.rect(face, STATUS_COLOR[m.status], face.get_rect(), width=Stroke.thick,
+                         border_radius=self.RADIUS)
 
         badge_r = max(8, h // 14)
         draw_status_icon(face, m.status, w - Space.md - badge_r, Space.md + badge_r, badge_r)
 
         if min(w, h) < COMPACT_PX:
-            font, text = fit_line(m.character.name, h // 4, w - 2 * Space.md, bold=True)
-            txt = font.render(text, True, Color.text)
+            font, text = fit_line(m.character.name, h // 4, w - 2 * Space.md, bold=True, face=Face.DISPLAY)
+            txt = font.render(text, True, Color.card_text)
             face.blit(txt, txt.get_rect(center=(w // 2, h // 2)))
             return face
 
         if m.clue_text is None:
-            self._blit_centered_name_job(face, w, h, Color.card_text, Color.card_text_dim)
+            self._blit_centered_name_job(face, w, h)
         else:
             self._blit_header(face, w, h, badge_r)
-            area = pygame.Rect(Space.sm, h * 22 // 100, w - 2 * Space.sm, h * 60 // 100)
+            area = pygame.Rect(Space.sm, h * 22 // 100, w - 2 * Space.sm, h * 54 // 100)
             font, lines = fit_wrapped(m.clue_text, area.w, area.h, max(10, h // 10))
-            y = area.y + (area.h - len(lines) * font.get_linesize()) // 2   # canh giữa theo chiều dọc
+            y = area.y + (area.h - len(lines) * font.get_linesize()) // 2
             face.set_clip(area)
             for line in lines:
-                txt = font.render(line, True, Color.text)
+                txt = font.render(line, True, Color.card_text)
                 face.blit(txt, txt.get_rect(midtop=(w // 2, max(area.y, y))))
                 y += font.get_linesize()
             face.set_clip(None)
 
-        label = f"is {m.status.value}"
-        font, text = fit_line(label, h // 11, w - 2 * Space.md, bold=True)
-        txt = font.render(text, True, Color.text)
-        face.blit(txt, txt.get_rect(center=(w // 2, h * 92 // 100)))
+        stamp = self._render_stamp(w, h)
+        face.blit(stamp, stamp.get_rect(center=(w // 2, h * 88 // 100)))
         return face
 
     def _blit_header(self, face: pygame.Surface, w: int, h: int, badge_r: int) -> None:
@@ -182,7 +202,7 @@ class CharacterCard:
         size = start
         can_show_job = True
         while True:
-            name_font, job_font = get_font(size, True), get_font(size)
+            name_font, job_font = get_font(size, True, Face.DISPLAY), get_font(size)
             total = name_font.size(ch.name)[0] + gap + job_font.size(ch.profession)[0]
             if total <= max_w:
                 break
@@ -194,13 +214,12 @@ class CharacterCard:
 
         cy = Space.md + badge_r
         if not can_show_job:
-            name_font, text = fit_line(ch.name, start, max_w, bold=True)   # bỏ nghề thì tên to lại
-            name = name_font.render(text, True, Color.text)
-            face.blit(name, name.get_rect(center=(w // 2, cy)))
+            name_font, text = fit_line(ch.name, start, max_w, bold=True, face=Face.DISPLAY)   # bỏ nghề thì tên to lại            name = name_font.render(text, True, Color.text)
+            name = name_font.render(text, True, Color.card_text)
             return
         
-        name = name_font.render(ch.name, True, Color.text)
-        job = job_font.render(ch.profession, True, Color.text)
+        name = name_font.render(ch.name, True, Color.card_text)
+        job = job_font.render(ch.profession, True, Color.card_text_dim)
         x = (w - (name.get_width() + gap + job.get_width())) // 2
         cy = Space.md + badge_r                       # cùng hàng với huy hiệu
         face.blit(name, name.get_rect(midleft=(x, cy)))

@@ -48,6 +48,9 @@ class Color:
     criminal = _hex("963F3B")        # muted burgundy
     innocent = _hex("39775A")        # muted forest green
     badge_bg = _hex("151310")
+    card_face = _hex("DCCBA8")          # giấy da sáng hơn mặt úp, dùng cho thẻ đã lật
+    stamp_criminal = _hex("7F2A27")     # mực con dấu, đậm hơn criminal để đủ tương phản trên giấy
+    stamp_innocent = _hex("245A41")
 
     # tương tác
     accent = _hex("C49A58")          # antique gold, chỉ dành cho chrome, KHÔNG dùng gần vùng highlight
@@ -109,6 +112,11 @@ STATUS_COLOR = {
     Status.INNOCENT: Color.innocent,
 }
 
+STAMP_COLOR = {
+    Status.CRIMINAL: Color.stamp_criminal,
+    Status.INNOCENT: Color.stamp_innocent,
+}
+
 ROLE_COLOR = {
     Role.SUBJECT: Color.role_subject,
     Role.COUNTED: Color.role_counted,
@@ -117,27 +125,41 @@ ROLE_COLOR = {
 
 
 # ------------------------------------------------------------------ fonts
+class Face:
+    """Vai trò kiểu chữ"""
+    BODY = "body"               # Source Sans 3: clue, nghề, nút, status bar
+    DISPLAY = "display"         # Oswald: tên nghi phạm, tiêu đề mục, tab
+    TYPEWRITER = "typewriter"   # Special Elite: tên vụ án, mã ô, con dấu
+
+
 FONT_DIR = Path(__file__).resolve().parent / "assets" / "fonts"
-_FONT_FILES = {False: "Inter-Regular.ttf", True: "Inter-SemiBold.ttf"}
-_FALLBACK_FAMILIES = "segoeui,helveticaneue,helvetica,arial,dejavusans"
+_FONT_FILES = {
+    (Face.BODY, False): "SourceSans3-Regular.ttf",
+    (Face.BODY, True): "SourceSans3-SemiBold.ttf",
+    (Face.DISPLAY, False): "Oswald-Medium.ttf",
+    (Face.DISPLAY, True): "Oswald-SemiBold.ttf",
+    (Face.TYPEWRITER, False): "SpecialElite-Regular.ttf",
+    (Face.TYPEWRITER, True): "SpecialElite-Regular.ttf",   # chỉ có một độ đậm
+}
+_FALLBACK_FAMILIES = {
+    Face.BODY: "segoeui,helveticaneue,helvetica,arial,dejavusans",
+    Face.DISPLAY: "oswald,impact,arialnarrow,arial,dejavusans",
+    Face.TYPEWRITER: "couriernew,courier,dejavusansmono",
+}
 
 
 @functools.lru_cache(maxsize=None)
-def get_font(size: int, bold: bool = False) -> pygame.font.Font:
+def get_font(size: int, bold: bool = False, face: str = Face.BODY) -> pygame.font.Font:
     """Font TTF đóng gói theo dự án; thiếu file thì rơi về font hệ thống"""
-    path = FONT_DIR / _FONT_FILES[bold]
+    path = FONT_DIR / _FONT_FILES[(face, bold)]
     if path.is_file():
         return pygame.font.Font(str(path), size)
-    return pygame.font.SysFont(_FALLBACK_FAMILIES, size, bold=bold)
+    return pygame.font.SysFont(_FALLBACK_FAMILIES[face], size, bold=bold)
 
 
 @functools.lru_cache(maxsize=1024)
-def render_text(text: str, size: int, color: tuple, bold: bool = False) -> pygame.Surface:
-    """
-    Render chữ có cache theo (text, size, color, bold).
-    Surface trả về được dùng chung giữa các lần gọi: KHÔNG được sửa nó.
-    """
-    return get_font(size, bold).render(text, True, color)
+def render_text(text: str, size: int, color: tuple, bold: bool = False, face: str = Face.BODY) -> pygame.Surface:
+    return get_font(size, bold, face).render(text, True, color)
 
 
 def ellipsize(text: str, font: pygame.font.Font, max_width: int) -> str:
@@ -150,12 +172,12 @@ def ellipsize(text: str, font: pygame.font.Font, max_width: int) -> str:
 
 
 def fit_line(text: str, max_size: int, max_width: int, bold: bool = False,
-             min_size: int = Size.min_text) -> tuple[pygame.font.Font, str]:
+             min_size: int = Size.min_text, face: str = Face.BODY) -> tuple[pygame.font.Font, str]:
     """Một dòng: co cỡ chữ tới min_size, vẫn không vừa thì cắt bằng '...'. Trả về (font, text)"""
     size = max(min_size, max_size)
-    while size > min_size and get_font(size, bold).size(text)[0] > max_width:
+    while size > min_size and get_font(size, bold, face).size(text)[0] > max_width:
         size -= 1
-    font = get_font(size, bold)
+    font = get_font(size, bold, face)
     return font, ellipsize(text, font, max_width)
 
 

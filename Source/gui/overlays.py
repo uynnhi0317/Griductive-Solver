@@ -15,7 +15,8 @@ from typing import Callable, Sequence
 import pygame
 
 from .component import Component
-from .theme import Color, Radius, Size, Space, Stroke, draw_rect_alpha, ellipsize, get_font, render_text
+from .theme import (Color, Face, Radius, Size, Space, Stroke, 
+                    draw_rect_alpha, ellipsize, get_font, render_text)
 from .widgets import BUTTON_H, Button
 
 
@@ -117,7 +118,7 @@ class GuideOverlay(Overlay):
         p = self.panel
         x0, inner_w = p.x + Space.xl, p.w - 2 * Space.xl
 
-        surface.blit(render_text("How to play", Size.title, Color.text, True), (x0, p.y + Space.xl))
+        surface.blit(render_text("How to play", Size.title, Color.text, True, Face.DISPLAY), (x0, p.y + Space.xl))
         sub = ellipsize("Makes verdicts based on the revealed clues.",
                         get_font(Size.body), inner_w)
         surface.blit(render_text(sub, Size.body, Color.text_dim), (x0, p.y + Space.xl + 40))
@@ -212,7 +213,7 @@ class LoadOverlay(Overlay):
     def draw(self, surface: pygame.Surface) -> None:
         self._draw_panel(surface)
         p = self.panel
-        title = render_text("Load stage", Size.title, Color.text, True)
+        title = render_text("Load stage", Size.title, Color.text, True, Face.DISPLAY)
         surface.blit(title, (p.x + Space.xl, p.y + Space.xl))
         count = render_text(f"{self.index + 1} / {len(self.stages)}", Size.body, Color.text_dim)
         surface.blit(count, count.get_rect(midright=(p.right - Space.xl, p.y + Space.xl + title.get_height() // 2)))

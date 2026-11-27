@@ -6,7 +6,7 @@ from game.character import Status
 from game.public_state import PublicState
 from .component import Component
 from .highlight import Role
-from .theme import (Color, ROLE_COLOR, Radius, Size, Space, Stroke, SCROLLBAR_W,
+from .theme import (Color, Face, ROLE_COLOR, Radius, Size, Space, Stroke, SCROLLBAR_W,
                     draw_status_icon, get_font, render_text, wrap_text, draw_scrollbar)
 
 PAD = Space.md              # lề của panel
@@ -58,7 +58,7 @@ class CluePanel(Component):
         return max(0, self._content_h - self.viewport.h)
 
     def _layout(self) -> None:
-        body, tag = get_font(Size.body), get_font(Size.caption, True)
+        body, tag = get_font(Size.body), get_font(Size.caption, True, Face.TYPEWRITER)
         text_w = self.area.w - 2 * PAD - 2 * ROW_PAD - SCROLLBAR_W
         y = 0
         for row in self._rows:
@@ -127,7 +127,7 @@ class CluePanel(Component):
         a = self.area
         pygame.draw.rect(surface, Color.surface_1, a, border_radius=Radius.card)
 
-        title = render_text(f"Clues ({len(self._rows)})", Size.h2, Color.text, True)
+        title = render_text(f"Clues ({len(self._rows)})", Size.h2, Color.text, True, Face.DISPLAY)
         surface.blit(title, (a.x + PAD, a.y + (HEADER_H - title.get_height()) // 2 + 2))
 
         vp = self.viewport
@@ -155,7 +155,7 @@ class CluePanel(Component):
         body_font = get_font(Size.body)
         x, y = rect.x + ROW_PAD, rect.y + ROW_PAD
         draw_status_icon(surface, row.status, x + ICON_R, y + ICON_R, ICON_R)
-        tag = render_text(f"{row.cell.label}  {row.name}", Size.caption, Color.text_dim, True)
+        tag = render_text(f"{row.cell.label}  {row.name}", Size.caption, Color.text_dim, True, Face.TYPEWRITER)
         surface.blit(tag, tag.get_rect(midleft=(x + 2 * ICON_R + Space.sm, y + ICON_R)))
 
         y += 2 * ICON_R + Space.xs

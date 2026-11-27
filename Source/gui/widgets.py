@@ -6,7 +6,7 @@ import pygame
 from game.character import Status
 from .component import Component
 from .theme import (
-    Color, LEVEL_COLOR, Level, Radius, Size, Space, Stroke, STATUS_COLOR,
+    Color, Face, LEVEL_COLOR, Level, Radius, Size, Space, Stroke, STATUS_COLOR,
     draw_rect_alpha, draw_status_icon, ellipsize, get_font, render_text,
 )
 
@@ -335,7 +335,7 @@ class TabBar(Component):
                                  (r.x, r.bottom - 2), (r.right, r.bottom - 2), 2)
             # label
             color = Color.text if active else Color.text_dim
-            txt = render_text(label, Size.body, color, True)
+            txt = render_text(label, Size.body, color, True, Face.DISPLAY)
             surface.blit(txt, txt.get_rect(center=r.center))
         # bottom border
         pygame.draw.line(surface, Color.border,

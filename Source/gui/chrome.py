@@ -6,7 +6,7 @@ import pygame
 
 from game.character import Status
 from .component import Component
-from .theme import Color, LEVEL_COLOR, Level, Size, Space, ellipsize, get_font, render_text
+from .theme import Color, Face, LEVEL_COLOR, Level, Size, Space, ellipsize, get_font, render_text
 from .widgets import Button, Slider, place_buttons
 
 NAV_W, NAV_H = 32, 28
@@ -54,8 +54,8 @@ class TopBar(Component):
         pygame.draw.rect(surface, Color.surface_1, r)
         pygame.draw.line(surface, Color.border, r.bottomleft, r.bottomright)
 
-        title = ellipsize(self.title, get_font(Size.h2, True), self._title_max_w)
-        t = render_text(title, Size.h2, Color.text, True)
+        title = ellipsize(self.title, get_font(Size.h2, True, Face.TYPEWRITER), self._title_max_w)
+        t = render_text(title, Size.h2, Color.text, True, Face.TYPEWRITER)
         surface.blit(t, t.get_rect(midleft=(r.x + Space.lg, r.centery)))
 
         for text, x in ((self.progress_text, self._progress_x), (self.stage_text, self._stage_x)):
